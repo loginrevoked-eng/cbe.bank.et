@@ -10,6 +10,5 @@
   "supabase_s3_aws_region": "us-east-2",
   "receipts_db_table": "receipts",
   "receipt_form_html_filename": "templates/receipt_form.html",
-  "mobile_receipt_html_template_filename": "templates/card-1.html",
   "receipt_pdf_html_template_filename": "templates/receipt.pdf.html"
 }

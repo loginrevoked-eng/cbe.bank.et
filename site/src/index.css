@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Roboto", system-ui, sans-serif;
+  /* Swap these for your own brand colors */
+  --color-brand: #7b1fa2;
+  --color-brand-dark: #5e1580;
+}
+
+body {
+  @apply bg-neutral-200 font-sans text-neutral-900 antialiased;
+  margin: 0;
+}

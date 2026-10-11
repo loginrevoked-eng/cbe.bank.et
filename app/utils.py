@@ -42,7 +42,9 @@ class Utils:
     
     @staticmethod
     def mask_account(account):
-        return account#account itself comes masked from frontend
+        if "*" in account:
+            return account
+        account = "10*****" + "".join(account[-4:])
 
 
 

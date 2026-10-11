@@ -1,7 +1,11 @@
 import psycopg2
 from psycopg2 import InterfaceError, OperationalError
-from .config import Config
-from .receipt import Receipt
+try:
+    from . import config as config_module
+    from .receipt import Receipt
+except ImportError:
+    import config as config_module
+    from receipt import Receipt
 
 
 class DBManager:
@@ -20,11 +24,11 @@ class DBManager:
         "total_amount": "NUMERIC",
     }
 
-    def __init__(self, config: Config, **kwargs):
-        self.config = config
-        self.connection_string = kwargs.get("connection_string") or config.credentials.neon_database_url
+    def __init__(self, **kwargs):
+        self.config = config_module.CONFIG
+        self.connection_string = kwargs.get("connection_string") or self.config.credentials.neon_database_url
         self.db_conn = None
-        self.receipts_table = kwargs.get("receipts_table") or config.receipts_db_table
+        self.receipts_table = kwargs.get("receipts_table") or self.config.receipts_db_table
         self.connect_timeout = kwargs.get("connect_timeout", 10)
 
     def _connect(self):
@@ -91,7 +95,7 @@ class DBManager:
 
         self._run(query, values)
 
-    def fetch_receipt(self, receipt_id, as_receipt=False):
+    def fetch_receipt(self, receipt_id):
         query = f"SELECT * FROM {self.receipts_table} WHERE receipt_id = %s"
 
         conn = self._ensure_connection()
@@ -113,4 +117,4 @@ class DBManager:
                 columns = [desc[0] for desc in cur.description]
 
         data = dict(zip(columns, row))
-        return Receipt(self.config, **data) if as_receipt else data
+        return Receipt(**data)

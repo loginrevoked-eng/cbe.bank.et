@@ -2,11 +2,15 @@ import os
 import boto3
 from botocore.config import Config as botocore_Config
 from botocore.exceptions import ClientError
-from .config import Config
+try:
+    from . import config as config_module
+except ImportError:
+    import config as config_module
 
 
 class S3Client:
-    def __init__(self, config:Config, **kwargs):
+    def __init__(self, **kwargs):
+        config = config_module.CONFIG
         self.boto_client = boto3.client(
             "s3",
             endpoint_url=config.supabase_s3_endpoint_url_s3,
@@ -24,7 +28,7 @@ class S3Client:
                 Filename=filepath,
                 Bucket=self.bucket_name,
                 Key=destination_path,
-                ExtraArgs={"ContentType": "application/pdf"},
+                ExtraArgs={"ContentType": "image/png" if filepath.lower().endswith(".png") else "application/pdf"},
             )
             print(f"Success! Uploaded directly to Supabase via S3: {self.bucket_name}/{destination_path}")
         except Exception as e:
@@ -32,7 +36,7 @@ class S3Client:
 
     def get_direct_url(self, filename: str, expires_in: int = 3600):
         try:
-            key = filename if filename.lower().endswith(".pdf") else f"{filename}.pdf"
+            key = filename
             return self.boto_client.generate_presigned_url(
                 ClientMethod="get_object",
                 Params={"Bucket": self.bucket_name, "Key": key},

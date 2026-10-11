@@ -7,3 +7,5 @@ requests
 pytest
 pytest-mock
 segno
+pydantic
+qrcode
