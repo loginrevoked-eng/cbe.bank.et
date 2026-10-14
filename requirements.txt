@@ -9,3 +9,4 @@ pytest-mock
 segno
 pydantic
 qrcode
+Pillow
