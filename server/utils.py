@@ -41,7 +41,14 @@ class Utils:
             return "N/A"
     
     @staticmethod
+    def mask_acc(account):
+        if "*" in account:
+            return account
+        account = "10*****" + "".join(account[-4:])
+
+    @staticmethod
     def mask_account(account):
+        if not account:return ""
         if "*" in account:
             return account
         account = "10*****" + "".join(account[-4:])

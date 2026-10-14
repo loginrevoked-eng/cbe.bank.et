@@ -1,52 +1,23 @@
-import { useEffect, useState } from "react";
-import { Routes, Route, useNavigate, useParams } from "react-router-dom";
+import { Routes, Route, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { apiUrl, useFetch } from "./Api.jsx";
+import { bank } from "./Config.jsx";
 import Home from "./components/Home.jsx";
+import Transfer from "./components/Transfer.jsx";
 import TransactionSuccess from "./components/TransactionSuccess.jsx";
-import { Loading, ErrorScreen } from "./components/Loading.jsx";
-import bankLogo from "../../assets/cbe_bank.png"; // your existing path
-
-const bank = {
-  name: "Commercial Bank of Ethiopia",
-  tagline: "The bank you can always rely on!",
-  logo: bankLogo,
-};
+import { Loading } from "./components/Loading.jsx";
+import ErrorScreen from "./components/ErrorScreen.jsx";
+import PageNotFound from "./components/PageNotFound.jsx";
 
 
-async function getJson(url, signal) {
-  const res = await fetch(url, { signal, credentials: "include" });
-  if (!res.ok) {
-    throw new Error(res.status === 404 ? "Not found" : `Request failed (${res.status})`);
-  }
-  return res.json();
-}
 
-function useFetch(url) {
-  const [state, setState] = useState({ data: null, loading: true, error: null });
-  const [attempt, setAttempt] = useState(0);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    setState({ data: null, loading: true, error: null });
-
-    getJson(url, controller.signal)
-      .then((data) => setState({ data, loading: false, error: null }))
-      .catch((err) => {
-        if (err.name !== "AbortError") {
-          setState({ data: null, loading: false, error: err.message });
-        }
-      });
-
-    return () => controller.abort();
-  }, [url, attempt]);
-
-  return { ...state, retry: () => setAttempt((n) => n + 1) };
-}
 
 // ---------- routes ----------
 function HomeRoute() {
-  const { accId } = useParams();
+  const { userId } = useParams();
   const navigate = useNavigate();
-  const { data: user, loading, error, retry } = useFetch(`/api/accounts/${encodeURIComponent(accId)}`);;
+  const [searchParams] = useSearchParams();
+  const { data: user, loading, error, retry } = useFetch(apiUrl(`/users/${encodeURIComponent(userId)}`));
+  const defaultReceiverId = searchParams.get("default_receiver") || user?.default_receiver || "";
 
   if (loading) return <Loading />;
   if (error) return <ErrorScreen message={error} onRetry={retry} />;
@@ -55,20 +26,50 @@ function HomeRoute() {
     <Home
       user={user}
       bank={bank}
-      account={user.account}
+      defaultReceiverId={defaultReceiverId}
       onScan={() => console.log("scan")}
       onAction={(name) => {
-        if (name === "CBE Transfer") navigate("/transactions/FT000000XXXX"); // temporary preview id
+        if (name === "CBE Transfer") navigate(`/transfer/?from=${encodeURIComponent(userId)}&to=${encodeURIComponent(defaultReceiverId)}`);
         else console.log("action:", name);
       }}
     />
   );
 }
 
-function SuccessRoute() {
-  const { txNum } = useParams();
+function TransferRoute() {
+  const { userId } = useParams();
   const navigate = useNavigate();
-  const { data: transaction, loading, error, retry } = useFetch(`/api/transactions/${encodeURIComponent(txNum)}`);
+  const [searchParams] = useSearchParams();
+  const senderId = searchParams.get("from") || userId || "";
+  const senderFetch = useFetch(senderId ? apiUrl(`/users/${encodeURIComponent(senderId)}`) : null);
+  const receiverId = searchParams.get("to") || senderFetch.data?.default_receiver || "";
+  const receiverFetch = useFetch(receiverId ? apiUrl(`/users/${encodeURIComponent(receiverId)}`) : null);
+
+  const handleSuccess = ({ transaction_id }) => {
+    navigate(`/transactions/${encodeURIComponent(transaction_id)}`);
+  };
+
+  if (senderFetch.loading || (Boolean(senderId) && !senderFetch.error && senderFetch.data?.userid !== senderId) || (Boolean(receiverId) && (receiverFetch.loading || (!receiverFetch.error && receiverFetch.data?.userid !== receiverId)))) return <Loading />;
+  if (senderFetch.error) return <ErrorScreen message={senderFetch.error} onRetry={senderFetch.retry} />;
+  if (!receiverId) return <ErrorScreen message="This transfer link needs a default receiver ID." />;
+  if (receiverFetch.error) return <ErrorScreen message={receiverFetch.error} onRetry={receiverFetch.retry} />;
+
+  return (
+    <Transfer
+      accountId={senderId}
+      user={senderFetch.data}
+      receiver={receiverFetch.data}
+      onBack={() => navigate(`/${encodeURIComponent(senderId)}`)}
+      onSelectReceiver={(id) => navigate(`/transfer/?from=${encodeURIComponent(senderId)}&to=${encodeURIComponent(id)}`)}
+      onSuccess={handleSuccess}
+    />
+  );
+}
+
+function TransactionRoute() {
+  const { txId } = useParams();
+  const navigate = useNavigate();
+  const { data: transaction, loading, error, retry } = useFetch(apiUrl(`/transactions/${encodeURIComponent(txId)}`));
 
   if (loading) return <Loading />;
   if (error) return <ErrorScreen message={error} onRetry={retry} />;
@@ -77,11 +78,10 @@ function SuccessRoute() {
     <TransactionSuccess
       transaction={transaction}
       bank={bank}
-      onReceipt={() => { window.location.href = transaction.receiptUrl; }}
+      onReceipt={() => { window.location.href = transaction.pdf_url; }}
       onScreenshot={() => console.log("screenshot")}
       onShare={() => console.log("share")}
-      onClose={() => navigate(`/${transaction.accId}`, { replace: true })
-      }
+      onClose={() => navigate(`/${encodeURIComponent(transaction.user_id)}`, { replace: true })}
     />
   );
 }
@@ -89,9 +89,11 @@ function SuccessRoute() {
 export default function App() {
   return (
     <Routes>
-      <Route path="/:accId" element={<HomeRoute />} />
-      <Route path="/transactions/:txNum" element={<SuccessRoute />} />
-      <Route path="*" element={<ErrorScreen message="Invalid link" />} />
+      <Route path="/:userId" element={<HomeRoute />} />
+      <Route path="/transfer" element={<TransferRoute />} />
+      <Route path="/transfer/:userId" element={<TransferRoute />} />
+      <Route path="/transactions/:txId" element={<TransactionRoute />} />
+      <Route path="*" element={<PageNotFound message="Invalid link" />} />
     </Routes>
   );
 }

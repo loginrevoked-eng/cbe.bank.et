@@ -1,0 +1,4 @@
+Reduce balance....when there is transaction
+change the loading screen into transparent one
+compile the React to vanilla js
+host...

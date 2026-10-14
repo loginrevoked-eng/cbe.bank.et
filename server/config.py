@@ -5,7 +5,7 @@ import json
 from typing import List
 from pathlib import Path
 
-CONFIG = None
+
 
 
 @dataclass
@@ -58,11 +58,13 @@ class Config:
     mobile_receipt_html_template_filename: str | None = None
     receipt_pdf_html_template_filename: str | None = None
     html2pdf_api_url: str = "https://api.html2pdfrocket.com/pdf"
-    supabase_s3_bucket_name: str = "receipt_pdfs"
+    supabase_s3_pdfs_bucket_name:str = "receipt_pdfs"
+    supabase_s3_qrcodes_bucket_name:str = "receipt_qrcodes"
     supabase_s3_endpoint_url_s3: str = "https://imjyodtjkxfeuduamnab.storage.supabase.co/storage/v1/s3"
     supabase_s3_aws_region: str = "us-east-2"
     receipts_db_table: str = "receipts"
     receipt_form_html_filename: str | None = None
+    default_fees: Dict[str, float] = field(default_factory=lambda:{"vat": 15, "commission": 2, "disaster_recovery": 0})
     credentials: Credentials = field(default_factory=Credentials.load)
 
     def __post_init__(self):
@@ -99,6 +101,5 @@ class Config:
         if not template_path.is_absolute():
             data["pdf_html_template_file"] = config_path.parent / template_path
         data["credentials"] = Credentials.load(str(env_path))
-        global CONFIG
-        CONFIG = cls(**data)
-        return CONFIG
+        return cls(**data)
+

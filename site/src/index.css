@@ -11,3 +11,24 @@ body {
   @apply bg-neutral-200 font-sans text-neutral-900 antialiased;
   margin: 0;
 }
+
+@keyframes app-spinner-rotate {
+  to { transform: rotate(360deg); }
+}
+
+.app-spinner {
+  border-width: 7px;
+  border-style: solid;
+  border-color: #e9dcf0;
+  border-top-color: #7a1c9e;
+  animation: app-spinner-rotate 0.75s linear infinite;
+}
+
+@keyframes error-toast-enter {
+  from { opacity: 0; transform: translateY(-140%); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.error-toast-enter {
+  animation: error-toast-enter 260ms cubic-bezier(0.18, 0.8, 0.32, 1) both;
+}

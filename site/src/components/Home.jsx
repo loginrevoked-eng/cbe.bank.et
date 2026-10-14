@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   LayoutGrid,
   RefreshCw,
@@ -8,6 +9,7 @@ import {
   Eye,
   EyeOff,
   Copy,
+  Check,
   CircleDollarSign,
   Receipt,
   CreditCard,
@@ -93,6 +95,26 @@ function CircleButton({ label, onClick, children }) {
 }
 
 function AccountCard({ account, bank, hidden, onToggleHidden }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copyNumber() {
+    try {
+      await navigator.clipboard.writeText(account.number);
+    } catch {
+      // fallback for non-secure contexts / older webviews
+      const t = document.createElement("textarea");
+      t.value = account.number;
+      t.style.position = "fixed";
+      t.style.opacity = "0";
+      document.body.appendChild(t);
+      t.select();
+      document.execCommand("copy");
+      document.body.removeChild(t);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
   return (
     <div className="relative w-full overflow-hidden rounded-3xl bg-gradient-to-b from-neutral-800 to-neutral-950 p-5 text-white shadow-xl">
       <WorldMapWatermark />
@@ -124,17 +146,19 @@ function AccountCard({ account, bank, hidden, onToggleHidden }) {
         </div>
 
         {/* Account line */}
-        <div className="mt-4 flex items-center justify-center gap-2 font-mono text-sm text-neutral-200">
-          <span>
-            {account.name} {account.masked}
+        <div className="mt-4 flex items-center justify-center gap-2 font-mono text-sm">
+          <span style={{ color: GOLD }}>
+            Saving Account {account.masked}
           </span>
           <button
             type="button"
-            aria-label="Copy account number"
-            onClick={() => navigator.clipboard?.writeText(account.number)}
-            className="p-1 text-neutral-400"
+            aria-label={copied ? "Account number copied" : "Copy account number"}
+            onClick={copyNumber}
+            className={`rounded-full p-1.5 transition active:scale-90 active:bg-white/10 ${
+              copied ? "text-green-400" : "text-neutral-400 hover:text-[#d9b46c]"
+            }`}
           >
-            <Copy size={16} />
+            {copied ? <Check size={16} /> : <Copy size={16} />}
           </button>
         </div>
 
@@ -144,7 +168,14 @@ function AccountCard({ account, bank, hidden, onToggleHidden }) {
   );
 }
 
-const DEFAULT_USER = { name: "Abdurahman" };
+// Matches the Python UserRecord dataclass
+const DEFAULT_USER = {
+  userid: "0",
+  account: "1000000008657",
+  balance: 12450,
+  first_name: "Abdurahman",
+  last_name: "",
+};
 const DEFAULT_BANK = {
   name: "Commercial Bank of Ethiopia",
   tagline: "The bank you can always rely on!",
@@ -154,24 +185,43 @@ const DEFAULT_BANK = {
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="none" stroke="#d9b46c" stroke-width="2"/><circle cx="20" cy="20" r="8" fill="#d9b46c"/></svg>'
     ),
 };
-const DEFAULT_ACCOUNT = {
-  balance: "12,450.00",
-  currency: "ETB",
-  name: "Wadiah Staff Sa 1",
-  masked: "**** 8657",
-  number: "1000000008657",
-  updatedAt: "01 Jul 2026 \u2022 10:14 AM",
-};
 
 export default function Home({
   user = DEFAULT_USER,
   bank = DEFAULT_BANK,
-  account = DEFAULT_ACCOUNT,
+  defaultReceiverId = "",
   language = "English",
   onScan,
   onAction,
 }) {
+  const navigate = useNavigate();
   const [hidden, setHidden] = useState(true);
+
+  // Build the card's display data from the UserRecord fields
+  const account = useMemo(
+    () => ({
+      balance: new Intl.NumberFormat("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(user.balance ?? 0),
+      currency: "ETB",
+      name: `${user.first_name} ${user.last_name}`.trim(),
+      masked: (() => {
+        const n = String(user.account);
+        if (n.length <= 5) return n;
+        return `${n[0]}${"*".repeat(n.length - 5)}${n.slice(-4)}`;
+      })(),
+      number: user.account,
+      updatedAt: new Date().toLocaleString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    }),
+    [user]
+  );
 
   const hideScrollbar = "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
 
@@ -185,7 +235,7 @@ export default function Home({
 
         <div className="leading-tight">
           <p className="text-sm text-white/70">Hello,</p>
-          <p className="text-xl font-bold">{user.name}</p>
+          <p className="text-xl font-bold">{user.first_name}</p>
         </div>
 
         <div className="ml-auto flex items-center gap-2.5">
@@ -253,7 +303,11 @@ export default function Home({
           <button
             key={title}
             type="button"
-            onClick={() => onAction?.(title)}
+            onClick={() =>
+            title === "CBE Transfer"
+              ? navigate(`/transfer/?from=${encodeURIComponent(user.userid)}&to=${encodeURIComponent(defaultReceiverId)}`)
+              : onAction?.(title)
+          }
             className="flex items-center gap-3 rounded-2xl bg-white px-4 py-[21px] text-left shadow-md"
           >
             <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${tone}`}>

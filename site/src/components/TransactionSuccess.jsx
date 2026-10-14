@@ -71,6 +71,22 @@ function BankFooter({ bank }) {
   );
 }
 
+const CURRENCY = "ETB"; // to_client() has no currency field, so it lives here now
+
+// to_client() sends everything as strings, so format here
+const num = (x) =>
+  Number(x).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// `time` is a BIGINT unix timestamp (seconds or milliseconds) arriving as a string
+const formatTime = (raw) => {
+  const n = Number(raw);
+  if (!n) return "";
+  const d = new Date(n < 1e12 ? n * 1000 : n);
+  const p = (v) => String(v).padStart(2, "0");
+  const mon = d.toLocaleString("en-US", { month: "short" });
+  return `${p(d.getDate())}-${mon}-${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+};
+
 export default function TransactionSuccess({
   transaction: t,
   bank,
@@ -79,8 +95,8 @@ export default function TransactionSuccess({
   onShare,
   onClose,
 }) {
-  const c = t.currency;
-  const Money = (x) => `${c}${x}`;
+  const c = CURRENCY;
+  const Money = (x) => `${c}${num(x)}`;
   const Acct = (x) => `${c}-${x}`;
 
   return (
@@ -117,19 +133,19 @@ export default function TransactionSuccess({
 
           <p className="mt-3 text-[17px] leading-8">
             {tpl`
-              ${c} ${Bold(t.amount)} has been debited from ${Bold(t.from.name)} ${Acct(t.from.account)}
-              for ${Bold(t.to.name)} ${Acct(t.to.account)} on ${Bold(t.date)}
-              with transaction ID: ${Bold(t.transactionId)}. Reason: ${t.reason}
-              Total Amount Debited: ${Money(t.total)} with Service Charge of ${Money(t.serviceCharge)},
-              VAT (${t.percentages.VAT}) of ${Money(t.vat)} and
-              Disaster Recovery (${t.percentages.disasterRecovery}) of ${Money(t.disasterRecovery)}.
+              ${c} ${Bold(num(t.amount))} has been debited from ${Bold(t.sender_name)} ${Acct(t.sender_account)}
+              for ${Bold(t.receiver_name)} ${Acct(t.receiver_account)} on ${Bold(formatTime(t.time))}
+              with transaction ID: ${Bold(t.transaction_id)}. Reason: ${t.reason}
+              Total Amount Debited: ${Money(t.total_debited)} with Service Charge of ${Money(t.fee_service_charge)},
+              VAT (${t.fee_vat_percentage}%) of ${Money(t.fee_vat_amount)} and
+              Disaster Recovery (${t.fee_disaster_recovery_percentage}%) of ${Money(t.fee_disaster_recovery_amount)}.
             `}
           </p>
 
           {/* QR code */}
           <div className="mt-3 flex justify-center">
             <div className="rounded-2xl border-4 border-neutral-500 bg-white p-3">
-              <QRCodeSVG value={t.qrValue} size={168} level="M" />
+              <QRCodeSVG value={t.qr_text || t.qr_url} size={168} level="M" />
             </div>
           </div>
 
@@ -166,7 +182,7 @@ export default function TransactionSuccess({
             onClick={onClose}
             className="w-full rounded-full border border-neutral-400 bg-neutral-200 py-3 text-base font-medium text-neutral-700 active:bg-neutral-300"
           >
-            Close
+            Cancel
           </button>
         </div>
       </section>

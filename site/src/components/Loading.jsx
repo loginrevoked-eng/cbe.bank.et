@@ -18,7 +18,7 @@ export function Loading({ label = "Loading…" }) {
       <div
         role="status"
         aria-label={label}
-        className="h-12 w-12 animate-spin rounded-full border-4 border-[#e9dcf0]"
+        className="app-spinner h-14 w-14 rounded-full"
         style={{ borderTopColor: PURPLE }}
       />
       <p className="text-base font-medium text-[#3a0b55]">{label}</p>
