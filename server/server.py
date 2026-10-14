@@ -1,7 +1,9 @@
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.staticfiles import StaticFiles
+from starlette.responses import FileResponse
 
 from .config import Config
 from .db import DBManager
@@ -20,8 +22,18 @@ users = UsersDB(config)
 recent_transfers = RecentTransfersDB(config)
 converter = HtmlToPdf(config.credentials.html2pdf_api_key)
 app = FastAPI()
-#app.mount("/assets", StaticFiles(directory="assets"), name="assets")
-#app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+class SPAStaticFiles(StaticFiles):
+    """Serve the Vite entry point for client-side routes on direct navigation."""
+
+    async def get_response(self, path, scope):
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            if exc.status_code != 404:
+                raise
+            return FileResponse(Path(self.all_directories[0]) / "index.html")
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -170,3 +182,8 @@ def get_recent_transfers(user_id: str, max_count: int):
     if users.fetch_user(user_id) is None:
         raise HTTPException(status_code=404, detail=f"User {user_id} not found")
     return recent_transfers.fetch(user_id, max(1, min(max_count, 100)))
+
+
+# Keep this mount after the API routes so /api requests continue to reach FastAPI.
+site_dist = Path(__file__).resolve().parent.parent / "site" / "dist"
+app.mount("/", SPAStaticFiles(directory=str(site_dist), html=True), name="site")

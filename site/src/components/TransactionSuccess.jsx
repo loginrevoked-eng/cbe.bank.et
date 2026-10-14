@@ -82,9 +82,17 @@ const formatTime = (raw) => {
   const n = Number(raw);
   if (!n) return "";
   const d = new Date(n < 1e12 ? n * 1000 : n);
-  const p = (v) => String(v).padStart(2, "0");
-  const mon = d.toLocaleString("en-US", { month: "short" });
-  return `${p(d.getDate())}-${mon}-${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Africa/Nairobi",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hourCycle: "h12",
+  }).formatToParts(d);
+  const value = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  return `${value.month} ${value.day}, ${value.year}, ${value.hour}:${value.minute}`;
 };
 
 export default function TransactionSuccess({
