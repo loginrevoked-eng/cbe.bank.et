@@ -151,26 +151,29 @@ export default function Transfer({
         </section>
 
         {/* Account number */}
-        <div style={styles.field}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={PURPLE} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 10l9-6 9 6M5 10v8M9 10v8M15 10v8M19 10v8M3 20h18" />
-          </svg>
-          <input
-            type="text"
-            inputMode="numeric"
-            placeholder="Account Number"
-            value={receiver?.account ?? ""}
-            readOnly
-            style={styles.input}
-          />
-          <button type="button" aria-label="Scan QR code" style={styles.iconBtn} disabled={Boolean(receiver)}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={PURPLE} strokeWidth="1.8" strokeLinejoin="round">
-              <rect x="3" y="3" width="7" height="7" />
-              <rect x="14" y="3" width="7" height="7" />
-              <rect x="3" y="14" width="7" height="7" />
-              <path d="M14 14h3v3h-3zM20 14v1M14 20h2M19 19h2v2" />
+        <div style={styles.receiverAccount}>
+          {receiver && <div style={styles.receiverName}>{receiver.full_name ?? `${receiver.first_name ?? ""} ${receiver.last_name ?? ""}`.trim()}</div>}
+          <div style={styles.field}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={PURPLE} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 10l9-6 9 6M5 10v8M9 10v8M15 10v8M19 10v8M3 20h18" />
             </svg>
-          </button>
+            <input
+              type="text"
+              inputMode="numeric"
+              placeholder="Account Number"
+              value={receiver?.account ?? ""}
+              readOnly
+              style={styles.input}
+            />
+            <button type="button" aria-label="Scan QR code" style={styles.iconBtn} disabled={Boolean(receiver)}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={PURPLE} strokeWidth="1.8" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="7" />
+                <rect x="14" y="3" width="7" height="7" />
+                <rect x="3" y="14" width="7" height="7" />
+                <path d="M14 14h3v3h-3zM20 14v1M14 20h2M19 19h2v2" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Amount */}
@@ -289,7 +292,7 @@ export default function Transfer({
 
 const styles = {
   screen: {
-    minHeight: "100vh",
+    minHeight: "100dvh",
     maxWidth: 480,
     margin: "0 auto",
     background: PURPLE,
@@ -299,12 +302,12 @@ const styles = {
   header: {
     display: "flex",
     alignItems: "center",
-    gap: 18,
-    padding: "28px 16px 22px",
+    gap: 12,
+    padding: "max(12px, env(safe-area-inset-top)) 14px 14px",
   },
   backBtn: {
-    width: 48,
-    height: 48,
+    width: 42,
+    height: 42,
     borderRadius: "50%",
     border: "none",
     background: "rgba(255,255,255,0.18)",
@@ -312,34 +315,36 @@ const styles = {
     placeItems: "center",
     cursor: "pointer",
   },
-  title: { margin: 0, fontSize: 28, fontWeight: 700, color: "#fff" },
+  title: { margin: 0, fontSize: 24, fontWeight: 700, color: "#fff" },
   sheet: {
     background: "#F8F8FC",
-    borderRadius: "32px 32px 0 0",
-    padding: "28px 16px 32px",
-    minHeight: "calc(100vh - 100px)",
+    borderRadius: "28px 28px 0 0",
+    padding: "18px 14px 20px",
+    minHeight: "calc(100dvh - 76px)",
     display: "flex",
     flexDirection: "column",
-    gap: 18,
+    gap: 12,
   },
   fromCard: {
     background: "#243230",
-    borderRadius: 24,
-    padding: "18px 20px",
+    borderRadius: 20,
+    padding: "14px 16px",
     color: "#F7E9B5",
   },
-  fromLabel: { fontSize: 18, marginBottom: 6 },
-  fromName: { fontSize: 18, fontWeight: 500 },
-  balanceRow: { display: "flex", alignItems: "center", gap: 14, marginTop: 8, color: "#fff" },
-  balance: { fontSize: 18, letterSpacing: 1 },
+  fromLabel: { fontSize: 16, marginBottom: 4 },
+  fromName: { fontSize: 16, fontWeight: 500 },
+  balanceRow: { display: "flex", alignItems: "center", gap: 10, marginTop: 6, color: "#fff" },
+  balance: { fontSize: 16, letterSpacing: 1 },
+  receiverAccount: { display: "flex", flexDirection: "column", gap: 6 },
+  receiverName: { alignSelf: "flex-start", color: PURPLE, fontSize: 14, fontWeight: 600, fontStyle: "italic" },
   field: {
     display: "flex",
     alignItems: "center",
-    gap: 14,
+    gap: 10,
     background: "#fff",
-    borderRadius: 22,
-    padding: "0 18px",
-    height: 84,
+    borderRadius: 18,
+    padding: "0 14px",
+    height: 64,
     boxShadow: "0 2px 8px rgba(70, 20, 90, 0.12)",
     border: "1px solid #EDE7F1",
   },
@@ -352,7 +357,7 @@ const styles = {
     border: "none",
     outline: "none",
     background: "transparent",
-    fontSize: 20,
+    fontSize: 18,
     color: "#1c1c1c",
   },
   iconBtn: {
@@ -366,7 +371,7 @@ const styles = {
   remarkBtn: {
     display: "flex",
     alignItems: "center",
-    gap: 12,
+    gap: 9,
     background: "none",
     border: "none",
     padding: "0 4px",
@@ -374,8 +379,8 @@ const styles = {
     color: "#1c1c1c",
   },
   plusBox: {
-    width: 26,
-    height: 26,
+    width: 24,
+    height: 24,
     border: `1.5px solid ${PURPLE}`,
     color: PURPLE,
     borderRadius: 7,
@@ -384,10 +389,10 @@ const styles = {
     fontSize: 20,
     lineHeight: 1,
   },
-  remarkHint: { fontSize: 14, color: "#555", fontWeight: 600 },
+  remarkHint: { fontSize: 12, color: "#555", fontWeight: 600 },
   remarkInput: {
-    height: 52,
-    borderRadius: 16,
+    height: 44,
+    borderRadius: 14,
     border: "1px solid #D9CCE0",
     padding: "0 16px",
     fontSize: 16,
@@ -395,12 +400,12 @@ const styles = {
     background: "#fff",
   },
   continueBtn: {
-    height: 72,
-    borderRadius: 36,
+    height: 56,
+    borderRadius: 28,
     border: "none",
     background: PURPLE,
     color: "#fff",
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: 600,
     cursor: "pointer",
   },
@@ -408,25 +413,25 @@ const styles = {
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
     background: "#EFF1FA",
-    borderRadius: 18,
-    padding: "6px 6px 0",
+    borderRadius: 14,
+    padding: "4px 4px 0",
   },
   listTab: {
     background: "none",
     border: "none",
-    padding: "14px 0 10px",
-    fontSize: 17,
+    padding: "8px 0",
+    fontSize: 15,
     fontWeight: 600,
     cursor: "pointer",
   },
-  list: { listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 12 },
+  list: { listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 },
   row: {
     display: "flex",
     alignItems: "center",
     gap: 10,
     background: "#fff",
-    borderRadius: 22,
-    padding: "14px 16px",
+    borderRadius: 18,
+    padding: "10px 12px",
     boxShadow: "0 2px 8px rgba(70, 20, 90, 0.08)",
   },
   rowMain: {
@@ -434,35 +439,35 @@ const styles = {
     minWidth: 0,
     display: "flex",
     alignItems: "center",
-    gap: 16,
+    gap: 12,
     background: "none",
     border: "none",
     padding: 0,
     cursor: "pointer",
   },
   avatar: {
-    width: 54,
-    height: 54,
+    width: 44,
+    height: 44,
     flexShrink: 0,
     borderRadius: "50%",
     background: PURPLE_SOFT,
     color: PURPLE,
     display: "grid",
     placeItems: "center",
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: 600,
   },
   rowName: {
     display: "block",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 500,
     color: "#1c1c1c",
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   },
-  rowAcct: { display: "block", fontSize: 18, color: "#777", marginTop: 4 },
-  empty: { textAlign: "center", color: "#777", padding: 24 },
+  rowAcct: { display: "block", fontSize: 13, color: "#777", marginTop: 2 },
+  empty: { textAlign: "center", color: "#777", padding: 16 },
   overlay: {
     position: "fixed",
     inset: 0,

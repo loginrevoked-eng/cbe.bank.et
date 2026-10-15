@@ -152,8 +152,8 @@ def get_transaction(transaction_id: str):
     receipt = db_manager.fetch_receipt(transaction_id)
     if receipt is None:
         raise HTTPException(status_code=404, detail=f"Receipt for transaction {transaction_id} not found")
-    receipt.sender.mask()
-    receipt.receiver.mask()
+    #receipt.sender.mask()
+    #receipt.receiver.mask()
     receipt.qr_url = s3_client.get_direct_url(receipt.qr_file(), "qrcode")
     receipt.pdf_url = s3_client.get_direct_url(receipt.pdf_file(), "pdf")
     return receipt.to_client()

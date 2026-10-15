@@ -116,7 +116,7 @@ function AccountCard({ account, bank, hidden, onToggleHidden }) {
   }
 
   return (
-    <div className="relative w-full overflow-hidden rounded-3xl bg-gradient-to-b from-neutral-800 to-neutral-950 p-5 text-white shadow-xl">
+    <div className="relative w-full overflow-hidden rounded-3xl bg-gradient-to-b from-neutral-800 to-neutral-950 p-4 text-white shadow-xl sm:p-5">
       <WorldMapWatermark />
 
       <div className="relative z-10">
@@ -130,8 +130,8 @@ function AccountCard({ account, bank, hidden, onToggleHidden }) {
         </div>
 
         {/* Balance */}
-        <div className="relative mt-5 flex items-center justify-center gap-2">
-          <span className="text-4xl font-bold tracking-widest">
+        <div className="relative mt-3 flex items-center justify-center gap-2">
+          <span className="text-3xl font-bold tracking-widest">
             {hidden ? "******" : account.balance}
           </span>
           <span className="mt-3 text-sm font-medium text-neutral-300">{account.currency}</span>
@@ -146,7 +146,7 @@ function AccountCard({ account, bank, hidden, onToggleHidden }) {
         </div>
 
         {/* Account line */}
-        <div className="mt-4 flex items-center justify-center gap-2 font-mono text-sm">
+        <div className="mt-3 flex items-center justify-center gap-2 font-mono text-xs">
           <span style={{ color: GOLD }}>
             Saving Account {account.masked}
           </span>
@@ -162,7 +162,7 @@ function AccountCard({ account, bank, hidden, onToggleHidden }) {
           </button>
         </div>
 
-        <p className="mt-4 text-center text-xs text-neutral-500">{account.updatedAt}</p>
+        <p className="mt-2 text-center text-[11px] text-neutral-500">{account.updatedAt}</p>
       </div>
     </div>
   );
@@ -195,7 +195,20 @@ export default function Home({
   onAction,
 }) {
   const navigate = useNavigate();
+  const receiverStorageKey = `cbe-session-default-receiver-${user.userid}`;
   const [hidden, setHidden] = useState(true);
+  const [languageMenuOpen, setLanguageMenuOpen] = useState(false);
+  const [receiverDialogOpen, setReceiverDialogOpen] = useState(false);
+  const [sessionReceiverId, setSessionReceiverId] = useState(() => sessionStorage.getItem(receiverStorageKey) || defaultReceiverId);
+  const [receiverIdDraft, setReceiverIdDraft] = useState(defaultReceiverId);
+
+  const chooseLanguage = (option) => {
+    setLanguageMenuOpen(false);
+    if (option === "Oromiffa") {
+      setReceiverIdDraft(sessionReceiverId);
+      setReceiverDialogOpen(true);
+    }
+  };
 
   // Build the card's display data from the UserRecord fields
   const account = useMemo(
@@ -226,9 +239,9 @@ export default function Home({
   const hideScrollbar = "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
 
   return (
-    <div className="relative mx-auto min-h-screen w-full max-w-[480px] bg-[#f8f7fb] pb-44 shadow-xl">
+    <div className="home-dashboard relative mx-auto min-h-screen w-full max-w-[480px] bg-[#f8f7fb] pb-28 shadow-xl">
       {/* Purple top bar */}
-      <header className="flex items-center gap-3 bg-[#7a1c9e] px-5 pb-4 pt-6 text-white">
+      <header className="flex items-center gap-2.5 bg-[#7a1c9e] px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] text-white">
         <CircleButton label="Menu" onClick={() => onAction?.("Menu")}>
           <LayoutGrid size={22} />
         </CircleButton>
@@ -239,14 +252,27 @@ export default function Home({
         </div>
 
         <div className="ml-auto flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={() => onAction?.("Language")}
-            className="flex items-center gap-1 rounded-full bg-white/20 px-4 py-2.5 text-sm font-medium text-white active:bg-white/30"
-          >
-            {language}
-            <ChevronDown size={16} />
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              aria-haspopup="listbox"
+              aria-expanded={languageMenuOpen}
+              onClick={() => setLanguageMenuOpen((open) => !open)}
+              className="flex items-center gap-1 rounded-full bg-white/20 px-4 py-2.5 text-sm font-medium text-white active:bg-white/30"
+            >
+              English
+              <ChevronDown size={16} />
+            </button>
+            {languageMenuOpen && (
+              <div role="listbox" aria-label="Choose language" className="absolute right-0 top-full z-50 mt-2 min-w-36 overflow-hidden rounded-xl bg-white py-1 text-sm text-neutral-800 shadow-lg">
+                {["English", "Amharic", "Oromiffa", "French"].map((option) => (
+                  <button key={option} type="button" role="option" aria-selected={option === "English"} onClick={() => chooseLanguage(option)} className="block w-full px-4 py-2.5 text-left hover:bg-purple-50 active:bg-purple-100">
+                    {option}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <CircleButton label="Refresh" onClick={() => onAction?.("Refresh")}>
             <RefreshCw size={20} />
           </CircleButton>
@@ -256,10 +282,25 @@ export default function Home({
         </div>
       </header>
 
+      {receiverDialogOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 px-5" onClick={() => setReceiverDialogOpen(false)}>
+          <section role="dialog" aria-modal="true" aria-labelledby="receiver-id-title" className="w-full max-w-sm rounded-2xl bg-white p-5 text-neutral-900 shadow-xl" onClick={(event) => event.stopPropagation()}>
+            <h2 id="receiver-id-title" className="text-lg font-semibold text-[#7a1c9e]">Set default receiver</h2>
+            <p className="mt-1 text-sm text-neutral-600">Enter the receiver ID to use for transfers during this session.</p>
+            <label htmlFor="session-receiver-id" className="mt-4 block text-sm font-medium">Receiver ID</label>
+            <input id="session-receiver-id" type="text" value={receiverIdDraft} onChange={(event) => setReceiverIdDraft(event.target.value)} className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2.5 outline-none focus:border-[#7a1c9e]" autoFocus />
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => setReceiverDialogOpen(false)} className="rounded-lg px-4 py-2 text-sm font-medium text-neutral-600">Cancel</button>
+              <button type="button" onClick={() => { const nextReceiverId = receiverIdDraft.trim(); setSessionReceiverId(nextReceiverId); sessionStorage.setItem(receiverStorageKey, nextReceiverId); setReceiverDialogOpen(false); }} className="rounded-lg bg-[#7a1c9e] px-4 py-2 text-sm font-medium text-white">Save</button>
+            </div>
+          </section>
+        </div>
+      )}
+
       {/* Single account card, sitting across the purple / light seam */}
       <div className="relative bg-[#7a1c9e]">
         <div className="absolute inset-x-0 bottom-0 h-[72px] rounded-t-[40px] bg-[#f8f7fb]" />
-        <div className="relative z-10 px-5 pb-4 pt-1">
+        <div className="relative z-10 px-4 pb-3 pt-1">
           <AccountCard
             account={account}
             bank={bank}
@@ -270,19 +311,19 @@ export default function Home({
       </div>
 
       {/* Quick actions */}
-      <div className="relative mt-5">
-        <div className={`flex overflow-x-auto px-5 ${hideScrollbar}`}>
+      <div className="relative mt-3">
+        <div className={`flex overflow-x-auto px-4 ${hideScrollbar}`}>
           {QUICK_ACTIONS.map(({ label, icon: Glyph }) => (
             <button
               key={label}
               type="button"
-              onClick={() => onAction?.(label)}
-              className="flex w-[110px] shrink-0 flex-col items-center gap-2 py-1 text-center"
+              onClick={() => onAction?.(label, sessionReceiverId)}
+              className="flex w-[82px] shrink-0 flex-col items-center gap-1.5 py-1 text-center"
             >
-              <span className="flex h-[60px] w-[60px] items-center justify-center rounded-full bg-white text-[#7a1c9e] shadow-md">
-                <Glyph size={26} />
+              <span className="flex h-[48px] w-[48px] items-center justify-center rounded-full bg-white text-[#7a1c9e] shadow-md">
+                <Glyph size={22} />
               </span>
-              <span className="w-[84px] text-[15px] font-medium leading-tight text-[#3a0b55]">
+              <span className="w-[76px] text-xs font-medium leading-tight text-[#3a0b55]">
                 {label}
               </span>
             </button>
@@ -298,23 +339,23 @@ export default function Home({
       </div>
 
       {/* Primary actions */}
-      <div className="mt-4 grid grid-cols-2 gap-[18px] px-5">
+      <div className="mt-3 grid grid-cols-2 gap-2.5 px-4">
         {PRIMARY_ACTIONS.map(({ title, sub, icon: Glyph, tone }) => (
           <button
             key={title}
             type="button"
             onClick={() =>
             title === "CBE Transfer"
-              ? navigate(`/transfer/?from=${encodeURIComponent(user.userid)}&to=${encodeURIComponent(defaultReceiverId)}`)
+              ? navigate(`/transfer/?from=${encodeURIComponent(user.userid)}&to=${encodeURIComponent(sessionReceiverId)}`)
               : onAction?.(title)
           }
-            className="flex items-center gap-3 rounded-2xl bg-white px-4 py-[21px] text-left shadow-md"
+            className="flex min-w-0 items-center gap-2 rounded-2xl bg-white px-2.5 py-3 text-left shadow-md"
           >
-            <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${tone}`}>
-              <Glyph size={20} />
+            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${tone}`}>
+              <Glyph size={18} />
             </span>
             <span className="leading-tight">
-              <span className="block text-[17px] font-bold text-[#3a0b55]">{title}</span>
+              <span className="block text-sm font-bold text-[#3a0b55]">{title}</span>
               <span className="block text-xs text-neutral-400">{sub}</span>
             </span>
           </button>
@@ -322,16 +363,16 @@ export default function Home({
       </div>
 
       {/* Tiles */}
-      <div className="mt-5 grid grid-cols-2 gap-5 px-[27px]">
+      <div className="mt-3 grid grid-cols-2 gap-3 px-4">
         {TILES.map(({ label, icon: Glyph }) => (
           <button
             key={label}
             type="button"
             onClick={() => onAction?.(label)}
-            className="flex h-[113px] flex-col items-center justify-center gap-3 rounded-3xl bg-white shadow-md"
+            className="flex h-[76px] flex-col items-center justify-center gap-1.5 rounded-2xl bg-white shadow-md"
           >
-            <Glyph size={32} className="text-[#7a1c9e]" />
-            <span className="text-base font-semibold text-[#3a0b55]">{label}</span>
+            <Glyph size={24} className="text-[#7a1c9e]" />
+            <span className="text-sm font-semibold text-[#3a0b55]">{label}</span>
           </button>
         ))}
       </div>
@@ -341,7 +382,7 @@ export default function Home({
         <button
           type="button"
           onClick={onScan}
-          className="pointer-events-auto flex items-center gap-2 rounded-full border-2 border-white/40 bg-[#7a1c9e] px-5 py-3 text-base font-bold text-white shadow-lg"
+          className="pointer-events-auto flex items-center gap-2 rounded-full border-2 border-white/40 bg-[#7a1c9e] px-4 py-2.5 text-sm font-bold text-white shadow-lg"
         >
           <ScanQrCode size={22} />
           Scan QR
@@ -349,7 +390,7 @@ export default function Home({
       </div>
 
       {/* Bottom navigation */}
-      <nav className="fixed inset-x-0 bottom-0 z-10 mx-auto flex max-w-[480px] items-center justify-between bg-white px-5 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
+      <nav className="fixed inset-x-0 bottom-0 z-10 mx-auto flex max-w-[480px] items-center justify-between bg-white px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
         <button
           type="button"
           className="flex items-center gap-2 rounded-full bg-[#f0e4cf] px-5 py-3 font-bold text-[#7a1c9e]"

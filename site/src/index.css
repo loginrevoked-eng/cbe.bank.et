@@ -12,6 +12,11 @@ body {
   margin: 0;
 }
 
+.home-dashboard {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
 @keyframes app-spinner-rotate {
   to { transform: rotate(360deg); }
 }

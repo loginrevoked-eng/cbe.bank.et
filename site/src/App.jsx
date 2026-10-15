@@ -28,8 +28,8 @@ function HomeRoute() {
       bank={bank}
       defaultReceiverId={defaultReceiverId}
       onScan={() => console.log("scan")}
-      onAction={(name) => {
-        if (name === "CBE Transfer") navigate(`/transfer/?from=${encodeURIComponent(userId)}&to=${encodeURIComponent(defaultReceiverId)}`);
+      onAction={(name, selectedReceiverId) => {
+        if (name === "CBE Transfer") navigate(`/transfer/?from=${encodeURIComponent(userId)}&to=${encodeURIComponent(selectedReceiverId || defaultReceiverId)}`);
         else console.log("action:", name);
       }}
     />

@@ -20,10 +20,10 @@ export default function ConfirmTransfer({ transfer, onCancel, onContinue }) {
   );
 }
 
-export function Sheet({ title, onCancel, children, topRightClose = false, showCancel = true, centerTitle = false }) {
+export function Sheet({ title, onCancel, children, topRightClose = false, showCancel = true, centerTitle = false, sheetStyle }) {
   return (
     <div style={styles.backdrop} onClick={onCancel}>
-      <section role="dialog" aria-modal="true" aria-labelledby="transfer-step-title" style={styles.sheet} onClick={(event) => event.stopPropagation()}>
+      <section role="dialog" aria-modal="true" aria-labelledby="transfer-step-title" style={{ ...styles.sheet, ...sheetStyle }} onClick={(event) => event.stopPropagation()}>
         <div style={styles.handle} />
         <div style={{ ...styles.titleRow, ...(centerTitle ? { justifyContent: "center" } : {}) }}>
           <h2 id="transfer-step-title" style={{ ...styles.title, ...(centerTitle ? { width: "100%", textAlign: "center" } : {}) }}>{title}</h2>

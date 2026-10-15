@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import secrets
 import qrcode
+from math import ceil
 from pydantic import BaseModel
 from typing import Any, Dict, Optional
 from dataclasses import dataclass, field, replace
@@ -27,21 +28,27 @@ class Fee:
 
     def calculate(self, num: float) -> float:
         return self.percentage * num
+    
+    @staticmethod
+    def ceil2(num: float) -> float:
+        return ceil(num * 100) / 100
 
 
 @dataclass
 class TransactionFees:
-    service_charge: float = 0.50
-    vat: Fee = field(default_factory=lambda: Fee(0.015))
+    service_charge: float = 0.5
+    vat: Fee = field(default_factory=lambda: Fee(0.15))
     commission: Fee = field(default_factory=lambda: Fee(0.00))
-    disaster_recovery: Fee = field(default_factory=lambda: Fee(0.03))
+    disaster_recovery: Fee = field(default_factory=lambda: Fee(0.05))
 
     def calculate_fees(self, amount: float) -> float:
         total = self.service_charge
-        total += self.vat.calculate(amount)
+        v = self.vat.calculate(self.service_charge)
         total += self.commission.calculate(amount)
-        total += self.disaster_recovery.calculate(amount)
-        return total
+        dr = self.disaster_recovery.calculate(self.service_charge)
+
+        #print(f"vat({self.vat.percentage*100}%):{v}, disaster_recovery({self.disaster_recovery.percentage*100}%):{dr}")
+        return total + dr + v
 
 
 class ReceiptRequest(BaseModel):
@@ -75,17 +82,17 @@ class Receipt:
             "total_debited": self.fee.calculate_fees(self.amount) + self.amount,
             "fee_service_charge": self.fee.service_charge,
             "fee_vat_percentage": self.fee.vat.percentage,
-            "fee_vat_amount": self.fee.vat.calculate(self.amount),
+            "fee_vat_amount": Fee.ceil2(self.fee.vat.calculate(self.fee.service_charge)),
             "fee_commission_percentage": self.fee.commission.percentage,
             "fee_commission_amount": self.fee.commission.calculate(self.amount),
             "fee_disaster_recovery_percentage": self.fee.disaster_recovery.percentage,
-            "fee_disaster_recovery_amount": self.fee.disaster_recovery.calculate(self.amount),
+            "fee_disaster_recovery_amount": Fee.ceil2(self.fee.disaster_recovery.calculate(self.fee.service_charge)),
             "sender_name": self.sender.name,
             "sender_account": self.sender.account,
             "receiver_name": self.receiver.name,
             "receiver_account": self.receiver.account,
             "time": self.time,
-            "reason": self.reason or "Mobile Transfer",
+            "reason": self.reason or "MB Transfer",
             "qr_url": self.qr_url,
             "pdf_url": self.pdf_url,
             "qr_text": self.qr_text,

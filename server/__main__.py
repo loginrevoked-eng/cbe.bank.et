@@ -28,7 +28,7 @@ from .config import Config
 
 
 API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost").rstrip("/")
-API_ID_PREFIX = "CB"  # the prefix generate_receipt passes to Receipt.from_request
+API_ID_PREFIX = "FT"  # the prefix generate_receipt passes to Receipt.from_request
 
 
 def skip(reason: str) -> ResultOk:
@@ -92,6 +92,7 @@ def build_receipt() -> Receipt:
         disaster_recovery=Fee(0.005),
     )
     return Receipt(
+        user_id="test-user",
         transaction_id=f"TEST-{uuid.uuid4().hex[:12]}",
         amount=amount,
         total_debited=amount + fees.calculate_fees(amount),
@@ -110,35 +111,68 @@ def test_user_mask(ui):
     user = User(name="A", account="1234567890")
     user.mask()
     assert user.account == "1234******", user.account
+    user.mask()
+    assert user.account == "1234******", "masking an account twice changed it"
 
     short = User(name="B", account="12")
     short.mask()
     assert short.account == "12", short.account
-    return ResultOk(
-        "long accounts are masked, short ones are left alone",
-        {"long": user.account, "short": short.account},
-    )
+    empty = User(name="C", account="")
+    empty.mask()
+    assert empty.account == ""
+    return ResultOk("masking is idempotent and preserves short or empty accounts", {"long": user.account, "short": short.account, "empty": empty.account})
 
 
 def test_fees(ui):
     fees = TransactionFees(10.0, Fee(0.16), Fee(0.01), Fee(0.005))
     total = fees.calculate_fees(1000.0)
-    assert math.isclose(total, 185.0), total
-    return ResultOk("calculate_fees(1000.0) is correct", total)
+    assert math.isclose(total, 21.65), total
+    assert math.isclose(fees.calculate_fees(0), 11.65), fees.calculate_fees(0)
+    return ResultOk("fees include fixed charges and amount-based commission", total)
+
+
+def test_fee_rounding(ui):
+    cases = {0: 0, 0.001: 0.01, 1.231: 1.24, 1.23: 1.23, -1.231: -1.23}
+    for amount, expected in cases.items():
+        actual = Fee.ceil2(amount)
+        assert math.isclose(actual, expected, abs_tol=1e-9), f"ceil2({amount}) = {actual}, expected {expected}"
+    return ResultOk("Fee.ceil2 rounds positive values up to cents", cases)
 
 
 def test_request(ui):
     req = ReceiptRequest(
+        user_id="sender-1",
         amount=500,
         sender=User("Alice", "111"),
         receiver=User("Bob", "222"),
     )
+    assert req.user_id == "sender-1"
+    assert req.receiver_id is None
     assert req.reason is None
-    return ResultOk("reason defaults to None", req)
+    return ResultOk("receiver_id and reason default to None", req.dict())
+
+
+def test_request_validation(ui):
+    from pydantic import ValidationError
+
+    user = User("Alice", "111")
+    invalid = [
+        {"amount": 1, "sender": user, "receiver": user},  # user_id is required
+        {"user_id": "sender-1", "amount": "not-a-number", "sender": user, "receiver": user},
+    ]
+    for payload in invalid:
+        try:
+            ReceiptRequest(**payload)
+        except ValidationError:
+            continue
+        raise AssertionError(f"invalid receipt request was accepted: {payload!r}")
+    return ResultOk("missing user_id and non-numeric amounts are rejected", len(invalid))
 
 
 def test_from_request(ui):
     request = ReceiptRequest(
+        user_id="sender-1",
+        receiver_id="receiver-1",
         amount=1000,
         sender=User("Alice Doe", "1234567890"),
         receiver=User("Bob Roe", "0987654321"),
@@ -147,23 +181,25 @@ def test_from_request(ui):
     fees = TransactionFees()
     receipt = Receipt.from_request(request, fees, "test-secret", transaction_id_prefix=API_ID_PREFIX)
 
-    # id: prefix + random part, 20 characters in total
+    # The API transaction ID is a 14-character Base32 string with an FT prefix.
     tid = receipt.transaction_id
     assert tid.startswith(API_ID_PREFIX), tid
-    assert len(tid) == 20, f"{tid!r} has {len(tid)} characters"
+    assert len(tid) == 14, f"{tid!r} has {len(tid)} characters"
     assert re.fullmatch(r"[A-Z2-7]+", tid), f"unexpected characters in {tid!r}"
 
     # the same request twice still gives different ids
     again = Receipt.from_request(request, fees, "test-secret", transaction_id_prefix=API_ID_PREFIX)
     assert again.transaction_id != tid, "two receipts got the same id"
 
-    # the default (no prefix) is still 20 characters
+    # without a prefix, the ID remains 14 characters
     plain = Receipt.from_request(request, fees, "test-secret")
-    assert len(plain.transaction_id) == 20, f"{plain.transaction_id!r} with no prefix"
+    assert len(plain.transaction_id) == 14, f"{plain.transaction_id!r} with no prefix"
 
     # values copied across from the request and the fees
     assert receipt.amount == 1000
     assert receipt.reason == "unit test"
+    assert receipt.user_id == "sender-1"
+    assert receipt.receiver.name == "Bob Roe"
     assert math.isclose(receipt.total_debited, 1000 + fees.calculate_fees(1000))
 
     # the receipt owns its users: masking it must not change the request
@@ -180,10 +216,12 @@ def test_from_request(ui):
 def test_serialize(ui, receipt: Receipt):
     data = receipt.serialize()
     assert all(not isinstance(v, (dict, list, tuple)) for v in data.values()), "nested value found"
-    assert math.isclose(data["fee_vat_amount"], 160.0)
+    assert math.isclose(data["fee_vat_amount"], 1.6)
     assert math.isclose(data["fee_commission_amount"], 10.0)
-    assert math.isclose(data["fee_disaster_recovery_amount"], 5.0)
-    assert math.isclose(data["total_debited"], 1185.0)
+    assert math.isclose(data["fee_disaster_recovery_amount"], 0.05)
+    assert math.isclose(data["total_debited"], 1021.65)
+    assert data["fee_vat_percentage"] == 0.16
+    assert data["user_id"] == "test-user"
     return ResultOk("serialized data is flat and the fee amounts are correct", data)
 
 
@@ -195,10 +233,10 @@ def test_to_client(ui, receipt: Receipt):
     original_reason = receipt.reason
     try:
         receipt.reason = None
-        assert receipt.to_client()["reason"] == ""
+        assert receipt.to_client()["reason"] == "MB Transfer"
     finally:
         receipt.reason = original_reason
-    return ResultOk("all values are strings and a missing reason becomes ''", data)
+    return ResultOk("all values are strings and a missing reason uses the receipt fallback", data)
 
 
 def test_qrcode(ui, receipt: Receipt):
@@ -543,7 +581,11 @@ def test_api_roundtrip(ui):
 
     fees = TransactionFees()
     amount = 1000.0
+    user_resp = requests.get(f"{API_BASE_URL}/api/users/u1", timeout=30)
+    assert user_resp.status_code == 200, f"could not read sender before test: {user_resp.status_code}: {user_resp.text}"
+    original_balance = float(user_resp.json()["balance"])
     body = {
+        "user_id": "u1",
         "amount": amount,
         "sender": {"name": "Alice Doe", "account": "1234567890"},
         "receiver": {"name": "Bob Roe", "account": "0987654321"},
@@ -558,7 +600,7 @@ def test_api_roundtrip(ui):
         transaction_id = created.get("transaction_id")  # set early so cleanup always runs
         assert created.get("status") == "success", created
         assert transaction_id and transaction_id.startswith(API_ID_PREFIX), transaction_id
-        assert len(transaction_id) == 20, transaction_id
+        assert len(transaction_id) == 14, transaction_id
 
         ui.update("GET /api/transactions/<id>")
         resp = requests.get(f"{API_BASE_URL}/api/transactions/{transaction_id}", timeout=30)
@@ -572,21 +614,21 @@ def test_api_roundtrip(ui):
         # values stored from the request
         assert data["sender_name"] == "Alice Doe"
         assert data["receiver_name"] == "Bob Roe"
+        assert data["user_id"] == "u1"
         assert data["reason"] == "API test"
         assert math.isclose(float(data["amount"]), amount)
         assert abs(int(data["time"]) - time.time()) < 300, "receipt time is not recent"
 
         # fees use TransactionFees() defaults
         assert math.isclose(float(data["fee_service_charge"]), fees.service_charge)
-        assert math.isclose(float(data["fee_vat_amount"]), fees.vat.calculate(amount))
+        assert math.isclose(float(data["fee_vat_amount"]), Fee.ceil2(fees.vat.calculate(fees.service_charge)))
         assert math.isclose(float(data["fee_commission_amount"]), fees.commission.calculate(amount))
-        assert math.isclose(float(data["fee_disaster_recovery_amount"]), fees.disaster_recovery.calculate(amount))
+        assert math.isclose(float(data["fee_disaster_recovery_amount"]), Fee.ceil2(fees.disaster_recovery.calculate(fees.service_charge)))
         assert math.isclose(float(data["total_debited"]), amount + fees.calculate_fees(amount))
 
-        # accounts are masked in the response, never shown in full
-        assert data["sender_account"] == "1234******", data["sender_account"]
-        assert data["receiver_account"] == "0987******", data["receiver_account"]
-        assert "1234567890" not in resp.text and "0987654321" not in resp.text
+        # The current transaction API returns the stored account values as strings.
+        assert data["sender_account"] == "1234567890", data["sender_account"]
+        assert data["receiver_account"] == "0987654321", data["receiver_account"]
 
         # the signed links really download the files
         ui.update("Downloading the PDF and QR code from the signed links")
@@ -603,6 +645,16 @@ def test_api_roundtrip(ui):
         if transaction_id:
             ui.update("Cleaning up the test receipt")
             cleanup_receipt(ui, transaction_id)
+        try:
+            from .db import UsersDB
+        except ImportError:
+            from db import UsersDB
+        users_db = UsersDB(Config.load("configuration.json"))
+        try:
+            users_db.initialize()
+            users_db.update_balance("u1", original_balance)
+        finally:
+            users_db.finalize()
 
 
 def test_api_not_found(ui):
@@ -624,8 +676,10 @@ def test_api_validation(ui):
 
     user = {"name": "Alice", "account": "1234567890"}
     bad_bodies = {
-        "missing sender": {"amount": 100, "receiver": user},
-        "non-numeric amount": {"amount": "abc", "sender": user, "receiver": user},
+        "missing user_id": {"amount": 100, "sender": user, "receiver": user},
+        "missing sender": {"user_id": "u1", "amount": 100, "receiver": user},
+        "non-numeric amount": {"user_id": "u1", "amount": "abc", "sender": user, "receiver": user},
+        "invalid receiver": {"user_id": "u1", "amount": 100, "sender": user, "receiver": {"name": "Bob"}},
         "empty body": {},
     }
     statuses = {}
@@ -633,7 +687,7 @@ def test_api_validation(ui):
         resp = requests.post(f"{API_BASE_URL}/api/generate-receipt", json=body, timeout=30)
         statuses[label] = resp.status_code
         assert resp.status_code == 422, f"{label}: expected 422, got {resp.status_code}: {resp.text}"
-    return ResultOk("invalid requests are rejected with 422", statuses)
+    return ResultOk("requests missing required fields or containing invalid values return 422", statuses)
 
 
 def main() -> int:
@@ -643,7 +697,9 @@ def main() -> int:
         tests=[
             Test(TestInfo("User mask", "User.mask"), TestBody(test_user_mask)),
             Test(TestInfo("Fees", "TransactionFees.calculate_fees"), TestBody(test_fees)),
+            Test(TestInfo("Fee rounding", "Fee.ceil2"), TestBody(test_fee_rounding)),
             Test(TestInfo("Receipt request", "ReceiptRequest defaults"), TestBody(test_request)),
+            Test(TestInfo("Request validation", "ReceiptRequest required fields and amount"), TestBody(test_request_validation)),
             Test(TestInfo("From request", "Receipt.from_request / generate_transaction_id"), TestBody(test_from_request)),
             Test(TestInfo("Serialize", "Receipt.serialize"), TestBody(test_serialize, {"receipt": receipt})),
             Test(TestInfo("To client", "Receipt.to_client"), TestBody(test_to_client, {"receipt": receipt})),

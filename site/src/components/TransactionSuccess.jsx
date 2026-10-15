@@ -1,11 +1,11 @@
-import { Fragment } from "react";
+import { Fragment, useLayoutEffect, useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
 
 
 // Tiny template DSL: mixes plain strings and JSX in one template
 const tpl = (strings, ...values) =>
   strings.flatMap((s, i) => [s, <Fragment key={i}>{values[i]}</Fragment>]);
-const Bold = (x) => <strong>{x}</strong>;
+const Bold = (x) => <strong className="font-black text-neutral-950">{x}</strong>;
 
 function ShieldCheck({ className = "" }) {
   return (
@@ -24,9 +24,8 @@ function Check({ className = "" }) {
   );
 }
 
-const Icon = ({ children }) => (
-  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke={"#000000"}
-    style={{ color: "#000000" }}
+const Icon = ({ children, className = "h-5 w-5" }) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor"
     strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     {children}
   </svg>
@@ -39,8 +38,8 @@ const ReceiptIcon = () => (
   </Icon>
 );
 
-const ScreenshotIcon = () => (
-  <Icon>
+const ScreenshotIcon = ({ className }) => (
+  <Icon className={className}>
     <path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4" />
     <path d="M9 9h6v6H9Z" />
   </Icon>
@@ -76,6 +75,20 @@ const CURRENCY = "ETB"; // to_client() has no currency field, so it lives here n
 // to_client() sends everything as strings, so format here
 const num = (x) =>
   Number(x).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const percent = (rate, feeAmount, baseAmount) => {
+  const value = Number(rate);
+  const recordedFee = Number(feeAmount);
+  const base = Number(baseAmount);
+  if (![value, recordedFee, base].every(Number.isFinite)) return "0";
+
+  // Some stored receipts have a rate one decimal place too small. Prefer the
+  // rate whose rounded fee matches the amount recorded on that receipt.
+  const feeForRate = (candidate) => Math.ceil(candidate * base * 100) / 100;
+  const directError = Math.abs(feeForRate(value) - recordedFee);
+  const correctedError = Math.abs(feeForRate(value * 10) - recordedFee);
+  const correctedRate = correctedError < directError ? value * 10 : value;
+  return Number((correctedRate * 100).toFixed(2)).toString();
+};
 
 // `time` is a BIGINT unix timestamp (seconds or milliseconds) arriving as a string
 const formatTime = (raw) => {
@@ -92,7 +105,13 @@ const formatTime = (raw) => {
     hourCycle: "h12",
   }).formatToParts(d);
   const value = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
-  return `${value.month} ${value.day}, ${value.year}, ${value.hour}:${value.minute}`;
+  const hourInNairobi = Number(new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Africa/Nairobi",
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).format(d));
+  const period = hourInNairobi >= 12 ? "PM" : "AM";
+  return `${value.month} ${value.day}, ${value.year}, ${value.hour}:${value.minute} ${period}`;
 };
 
 export default function TransactionSuccess({
@@ -106,12 +125,69 @@ export default function TransactionSuccess({
   const c = CURRENCY;
   const Money = (x) => `${c}${num(x)}`;
   const Acct = (x) => `${c}-${x}`;
+  const qrValue = new URL(
+    `/transactions/${encodeURIComponent(t.transaction_id)}`,
+    window.location.origin
+  ).href;
+  const receiptRef = useRef(null);
+
+  useLayoutEffect(() => {
+    const receipt = receiptRef.current;
+    if (!receipt) return undefined;
+    const originalStyles = {
+      zoom: receipt.style.zoom,
+      width: receipt.style.width,
+      maxWidth: receipt.style.maxWidth,
+    };
+    let active = true;
+
+    const fitReceipt = () => {
+      if (!active) return;
+      // Scale the existing receipt uniformly and expand its layout width by
+      // the same factor so its surface stays edge-to-edge in the WebView.
+      const viewportHeight = window.visualViewport?.height || window.innerHeight;
+      const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+      let scale = 1;
+
+      for (let pass = 0; pass < 3; pass += 1) {
+        receipt.style.zoom = "1";
+        receipt.style.width = `${viewportWidth / scale}px`;
+        receipt.style.maxWidth = `${viewportWidth / scale}px`;
+        const contentHeight = receipt.scrollHeight;
+        const nextScale = Math.min(1, viewportHeight / contentHeight);
+        if (Math.abs(nextScale - scale) < 0.005) {
+          scale = nextScale;
+          break;
+        }
+        scale = nextScale;
+      }
+
+      receipt.style.width = `${viewportWidth / scale}px`;
+      receipt.style.maxWidth = `${viewportWidth / scale}px`;
+      receipt.style.zoom = String(scale);
+    };
+
+    fitReceipt();
+    window.addEventListener("resize", fitReceipt);
+    window.visualViewport?.addEventListener("resize", fitReceipt);
+    document.fonts?.ready.then(fitReceipt);
+
+    return () => {
+      active = false;
+      window.removeEventListener("resize", fitReceipt);
+      window.visualViewport?.removeEventListener("resize", fitReceipt);
+      receipt.style.zoom = originalStyles.zoom;
+      receipt.style.width = originalStyles.width;
+      receipt.style.maxWidth = originalStyles.maxWidth;
+    };
+  }, [t]);
 
   return (
     // data-receipt: the element ScreenshotFrame captures
     <main
+      ref={receiptRef}
       data-receipt
-      className="mx-auto min-h-screen w-full max-w-[480px] overflow-hidden bg-white shadow-xl"
+      className="mx-auto min-h-screen w-full max-w-none overflow-hidden bg-white shadow-xl"
     >
       {/* Purple header */}
       <header className="flex h-[230px] items-start gap-3 bg-[#7a1c9e] px-5 pt-16 text-white">
@@ -120,6 +196,14 @@ export default function TransactionSuccess({
           <h1 className="text-xl font-bold">Thank you</h1>
           <p className="text-sm text-white/80">Success</p>
         </div>
+        <button
+          type="button"
+          onClick={onScreenshot}
+          aria-label="Save receipt screenshot"
+          className="ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/15 text-white active:bg-white/25"
+        >
+          <ScreenshotIcon className="h-6 w-6" />
+        </button>
       </header>
 
       {/* White sheet overlapping the header */}
@@ -139,21 +223,24 @@ export default function TransactionSuccess({
         <div className="mx-4 mt-6 rounded-3xl bg-neutral-100 px-4 pb-5 pt-4">
           <h2 className="text-base text-neutral-400">Transaction Summary</h2>
 
-          <p className="mt-3 text-[17px] leading-8">
+          <p
+            className="mt-3 text-lg font-medium leading-8 tracking-normal"
+            style={{ fontFamily: "Roboto, Arial, sans-serif" }}
+          >
             {tpl`
-              ${c} ${Bold(num(t.amount))} has been debited from ${Bold(t.sender_name)} ${Acct(t.sender_account)}
-              for ${Bold(t.receiver_name)} ${Acct(t.receiver_account)} on ${Bold(formatTime(t.time))}
+              ${c} ${Bold(num(t.amount))} has been debited from ${Bold(t.sender_name)} ${c}-${t.sender_account.slice(-4)}
+              for ${Bold(t.receiver_name)} ${c}-${t.receiver_account.slice(-4)} on ${Bold(formatTime(t.time))}
               with transaction ID: ${Bold(t.transaction_id)}. Reason: ${t.reason}
               Total Amount Debited: ${Money(t.total_debited)} with Service Charge of ${Money(t.fee_service_charge)},
-              VAT (${t.fee_vat_percentage}%) of ${Money(t.fee_vat_amount)} and
-              Disaster Recovery (${t.fee_disaster_recovery_percentage}%) of ${Money(t.fee_disaster_recovery_amount)}.
+              VAT (${percent(t.fee_vat_percentage, t.fee_vat_amount, t.fee_service_charge)}%) of ${Money(t.fee_vat_amount)} and
+              Disaster Recovery (${percent(t.fee_disaster_recovery_percentage, t.fee_disaster_recovery_amount, t.fee_service_charge)}%) of ${Money(t.fee_disaster_recovery_amount)}.
             `}
           </p>
 
           {/* QR code */}
           <div className="mt-3 flex justify-center">
             <div className="rounded-2xl border-4 border-neutral-500 bg-white p-3">
-              <QRCodeSVG value={t.qr_text || t.qr_url} size={168} level="M" />
+              <QRCodeSVG value={qrValue} size={168} level="M" />
             </div>
           </div>
 
