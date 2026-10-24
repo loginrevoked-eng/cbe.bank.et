@@ -191,6 +191,7 @@ export default function Home({
   bank = DEFAULT_BANK,
   defaultReceiverId = "",
   language = "English",
+  onReceiverChange,
   onScan,
   onAction,
 }) {
@@ -291,7 +292,7 @@ export default function Home({
             <input id="session-receiver-id" type="text" value={receiverIdDraft} onChange={(event) => setReceiverIdDraft(event.target.value)} className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2.5 outline-none focus:border-[#7a1c9e]" autoFocus />
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" onClick={() => setReceiverDialogOpen(false)} className="rounded-lg px-4 py-2 text-sm font-medium text-neutral-600">Cancel</button>
-              <button type="button" onClick={() => { const nextReceiverId = receiverIdDraft.trim(); setSessionReceiverId(nextReceiverId); sessionStorage.setItem(receiverStorageKey, nextReceiverId); setReceiverDialogOpen(false); }} className="rounded-lg bg-[#7a1c9e] px-4 py-2 text-sm font-medium text-white">Save</button>
+              <button type="button" onClick={() => { const nextReceiverId = receiverIdDraft.trim(); setSessionReceiverId(nextReceiverId); sessionStorage.setItem(receiverStorageKey, nextReceiverId); setReceiverDialogOpen(false); onReceiverChange?.(nextReceiverId); }} className="rounded-lg bg-[#7a1c9e] px-4 py-2 text-sm font-medium text-white">Save</button>
             </div>
           </section>
         </div>
