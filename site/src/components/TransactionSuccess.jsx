@@ -125,10 +125,7 @@ export default function TransactionSuccess({
   const c = CURRENCY;
   const Money = (x) => `${c}${num(x)}`;
   const Acct = (x) => `${c}-${x}`;
-  const qrValue = new URL(
-    `/api/receipt/pdf/${encodeURIComponent(t.transaction_id)}.pdf`,
-    window.location.origin
-  ).href;
+  const qrValue = new URL(`/api/pdf/${encodeURIComponent(t.transaction_id)}`, window.location.origin).href;
   const receiptRef = useRef(null);
 
   useLayoutEffect(() => {
