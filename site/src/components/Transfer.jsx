@@ -33,6 +33,7 @@ export default function Transfer({
   accountId, // sender account, taken from the /transfer/:userId URL
   user, // fetched user; drives the From Account card and recent transfers
   pinLength = 6,
+  bankHouseLogo,
   onBack = () => {},
   onSubmitSuccess = () => {},
   onSuccess = () => {},
@@ -239,18 +240,23 @@ export default function Transfer({
           {accountLookupFocused && accountMatches.length > 0 && (
             <ul className="absolute inset-x-0 top-full z-30 mt-1 max-h-60 overflow-y-auto rounded-2xl bg-white p-2 shadow-xl">
               {accountMatches.map((match) => (
-                <li key={match.userid}>
+                <li key={match.userid} className="border-b border-black/20 last:border-b-0">
                   <button
                     type="button"
                     onPointerDown={(event) => event.preventDefault()}
                     onClick={() => chooseReceiver(match)}
-                    className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-3 text-left hover:bg-purple-50"
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-purple-50"
                   >
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#f1e4f6]" aria-hidden="true">
+                      <img src={bankHouseLogo} alt="" className="h-6 w-6 object-contain" />
+                    </span>
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-semibold text-[#3a0b55]">{match.full_name}</span>
                       <span className="block text-xs text-neutral-500">{match.account}</span>
                     </span>
-                    <span className="text-xs font-semibold text-[#7a1c9e]">Select</span>
+                    <svg className="ml-auto h-5 w-5 shrink-0 text-[#7a1c9e]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="m9 5 7 7-7 7" />
+                    </svg>
                   </button>
                 </li>
               ))}

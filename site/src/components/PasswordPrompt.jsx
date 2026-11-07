@@ -20,7 +20,7 @@ export default function PasswordPrompt({ password, pinLength = 6, onPasswordChan
         style={{ display: "flex", justifyContent: "center", gap: 10, margin: "16px 0 10px", flexShrink: 0 }}
       >
         {Array.from(
-          { length: password.length === pinLength ? pinLength : PIN_CIRCLE_COUNT },
+          { length: password.length === 0 ? PIN_CIRCLE_COUNT : password.length },
           (_, index) => (
           <span
             key={index}
@@ -32,7 +32,8 @@ export default function PasswordPrompt({ password, pinLength = 6, onPasswordChan
               placeItems: "center",
               border: `1.5px solid ${index < password.length ? "#7a1c9e" : "#d8cddd"}`,
               borderRadius: "50%",
-              color: "#7a1c9e",
+              background: index < password.length ? "#7a1c9e" : "transparent",
+              color: index < password.length ? "#fff" : "#7a1c9e",
               fontSize: 22,
               lineHeight: 1,
             }}

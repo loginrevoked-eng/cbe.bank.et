@@ -4,7 +4,7 @@ import { Loading } from "../components/Loading.jsx";
 import Transfer from "../components/Transfer.jsx";
 import { updateCachedUserBalance, useCachedUser } from "./userCache.js";
 
-export default function TransferRoute({ pinLength = 6 }) {
+export default function TransferRoute({ pinLength = 6, bankHouseLogo }) {
   const { userId } = useParams();
   const navigate = useNavigate();
   const senderId = userId || "";
@@ -26,6 +26,7 @@ export default function TransferRoute({ pinLength = 6 }) {
       accountId={senderId}
       user={sender}
       pinLength={pinLength}
+      bankHouseLogo={bankHouseLogo}
       onBack={() => navigate(`/home/${encodeURIComponent(senderId)}`)}
       onSubmitSuccess={handleSubmitSuccess}
       onSuccess={handleSuccess}

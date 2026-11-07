@@ -44,10 +44,17 @@ function Party({ label, name, account }) {
       <span style={styles.partyLabel}>{label}</span>
       <span style={styles.partyDetails}>
         <span style={styles.partyName}>{name || "Name unavailable"}</span>
-        <span style={styles.partyAccount}>{account}</span>
+        <span style={styles.partyAccount}>{maskAccount(account)}</span>
       </span>
     </li>
   );
+}
+
+function maskAccount(account = "") {
+  const value = String(account);
+  if (!value) return "Account unavailable";
+  if (value.includes("*")) return value;
+  return `${value[0]}******${value.slice(-4)}`;
 }
 
 const styles = {
