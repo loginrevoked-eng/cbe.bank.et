@@ -200,7 +200,7 @@ function PinField({ value, onChange, lockIcon }) {
       style={{
         backgroundColor: COLORS.surface,
         borderColor: COLORS.surfaceBorder,
-        boxShadow: "0 4px 14px rgba(20,30,60,0.06)",
+        boxShadow: "0 0 12px rgba(0,0,0,0.12)",
       }}
     >
       <span className="flex h-5 w-5 shrink-0 items-center justify-center">

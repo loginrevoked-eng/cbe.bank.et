@@ -26,8 +26,8 @@ export default function PasswordPrompt({ password, pinLength = 6, onPasswordChan
             key={index}
             aria-hidden="true"
             style={{
-              width: 38,
-              height: 38,
+              width: 30,
+              height: 30,
               display: "grid",
               placeItems: "center",
               border: `1.5px solid ${index < password.length ? "#7a1c9e" : "#d8cddd"}`,
@@ -37,9 +37,7 @@ export default function PasswordPrompt({ password, pinLength = 6, onPasswordChan
               fontSize: 22,
               lineHeight: 1,
             }}
-          >
-            {index < password.length ? "•" : ""}
-          </span>
+          />
           ),
         )}
       </div>

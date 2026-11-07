@@ -1,6 +1,7 @@
 import { Check, Delete } from "lucide-react";
 
 export default function OnScreenKeyboard({ password, pinLength = 6, onPasswordChange, onContinue }) {
+  const canContinue = password.length === pinLength;
   const addDigit = (digit) => {
     if (password.length < pinLength) onPasswordChange(`${password}${digit}`);
   };
@@ -35,12 +36,12 @@ export default function OnScreenKeyboard({ password, pinLength = 6, onPasswordCh
       <button
         type="button"
         onClick={onContinue}
-        disabled={password.length !== pinLength}
+        disabled={!canContinue}
         style={{
           ...styles.key,
-          background: password.length >= 4 ? "#7a1c9e" : "#eee8f0",
-          borderColor: password.length >= 4 ? "#7a1c9e" : "#eee8f0",
-          color: password.length >= 4 ? "#fff" : "#9b91a0",
+          background: canContinue ? "#7a1c9e" : "#eee8f0",
+          borderColor: canContinue ? "#7a1c9e" : "#eee8f0",
+          color: canContinue ? "#fff" : "#9b91a0",
         }}
         aria-label="Done"
       >
