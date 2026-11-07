@@ -189,26 +189,18 @@ const DEFAULT_BANK = {
 export default function Home({
   user = DEFAULT_USER,
   bank = DEFAULT_BANK,
-  defaultReceiverId = "",
   language = "English",
-  onReceiverChange,
   onScan,
   onAction,
 }) {
   const navigate = useNavigate();
-  const receiverStorageKey = `cbe-session-default-receiver-${user.userid}`;
   const [hidden, setHidden] = useState(true);
   const [languageMenuOpen, setLanguageMenuOpen] = useState(false);
-  const [receiverDialogOpen, setReceiverDialogOpen] = useState(false);
-  const [sessionReceiverId, setSessionReceiverId] = useState(() => sessionStorage.getItem(receiverStorageKey) || defaultReceiverId);
-  const [receiverIdDraft, setReceiverIdDraft] = useState(defaultReceiverId);
+  const [selectedLanguage, setSelectedLanguage] = useState(language);
 
   const chooseLanguage = (option) => {
+    setSelectedLanguage(option);
     setLanguageMenuOpen(false);
-    if (option === "Oromiffa") {
-      setReceiverIdDraft(sessionReceiverId);
-      setReceiverDialogOpen(true);
-    }
   };
 
   // Build the card's display data from the UserRecord fields
@@ -261,13 +253,13 @@ export default function Home({
               onClick={() => setLanguageMenuOpen((open) => !open)}
               className="flex items-center gap-1 rounded-full bg-white/20 px-4 py-2.5 text-sm font-medium text-white active:bg-white/30"
             >
-              English
+              {selectedLanguage}
               <ChevronDown size={16} />
             </button>
             {languageMenuOpen && (
               <div role="listbox" aria-label="Choose language" className="absolute right-0 top-full z-50 mt-2 min-w-36 overflow-hidden rounded-xl bg-white py-1 text-sm text-neutral-800 shadow-lg">
                 {["English", "Amharic", "Oromiffa", "French"].map((option) => (
-                  <button key={option} type="button" role="option" aria-selected={option === "English"} onClick={() => chooseLanguage(option)} className="block w-full px-4 py-2.5 text-left hover:bg-purple-50 active:bg-purple-100">
+                  <button key={option} type="button" role="option" aria-selected={option === selectedLanguage} onClick={() => chooseLanguage(option)} className="block w-full px-4 py-2.5 text-left hover:bg-purple-50 active:bg-purple-100">
                     {option}
                   </button>
                 ))}
@@ -282,21 +274,6 @@ export default function Home({
           </CircleButton>
         </div>
       </header>
-
-      {receiverDialogOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 px-5" onClick={() => setReceiverDialogOpen(false)}>
-          <section role="dialog" aria-modal="true" aria-labelledby="receiver-id-title" className="w-full max-w-sm rounded-2xl bg-white p-5 text-neutral-900 shadow-xl" onClick={(event) => event.stopPropagation()}>
-            <h2 id="receiver-id-title" className="text-lg font-semibold text-[#7a1c9e]">Set default receiver</h2>
-            <p className="mt-1 text-sm text-neutral-600">Enter the receiver ID to use for transfers during this session.</p>
-            <label htmlFor="session-receiver-id" className="mt-4 block text-sm font-medium">Receiver ID</label>
-            <input id="session-receiver-id" type="text" value={receiverIdDraft} onChange={(event) => setReceiverIdDraft(event.target.value)} className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2.5 outline-none focus:border-[#7a1c9e]" autoFocus />
-            <div className="mt-5 flex justify-end gap-2">
-              <button type="button" onClick={() => setReceiverDialogOpen(false)} className="rounded-lg px-4 py-2 text-sm font-medium text-neutral-600">Cancel</button>
-              <button type="button" onClick={() => { const nextReceiverId = receiverIdDraft.trim(); setSessionReceiverId(nextReceiverId); sessionStorage.setItem(receiverStorageKey, nextReceiverId); setReceiverDialogOpen(false); onReceiverChange?.(nextReceiverId); }} className="rounded-lg bg-[#7a1c9e] px-4 py-2 text-sm font-medium text-white">Save</button>
-            </div>
-          </section>
-        </div>
-      )}
 
       {/* Single account card, sitting across the purple / light seam */}
       <div className="relative bg-[#7a1c9e]">
@@ -318,7 +295,7 @@ export default function Home({
             <button
               key={label}
               type="button"
-              onClick={() => onAction?.(label, sessionReceiverId)}
+              onClick={() => onAction?.(label)}
               className="flex w-[82px] shrink-0 flex-col items-center gap-1.5 py-1 text-center"
             >
               <span className="flex h-[48px] w-[48px] items-center justify-center rounded-full bg-white text-[#7a1c9e] shadow-md">
@@ -347,7 +324,7 @@ export default function Home({
             type="button"
             onClick={() =>
             title === "CBE Transfer"
-              ? navigate(`/transfer/?from=${encodeURIComponent(user.userid)}&to=${encodeURIComponent(sessionReceiverId)}`)
+              ? navigate(`/transfer/${encodeURIComponent(user.userid)}`)
               : onAction?.(title)
           }
             className="flex min-w-0 items-center gap-2 rounded-2xl bg-white px-2.5 py-3 text-left shadow-md"

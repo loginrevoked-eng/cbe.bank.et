@@ -1,7 +1,8 @@
-import { useRef, useState } from "react";
-import { apiUrl, useFetch, usePost } from "../Api.jsx";
+import { useEffect, useRef, useState } from "react";
+import { apiUrl, useFetch, usePost } from "../api/http.js";
+import { createAccountLookupSocket } from "../api/accountLookup.js";
 import ConfirmTransfer from "./ConfirmTransfer.jsx";
-import EnterPassword from "./EnterPassword.jsx";
+import PasswordPrompt from "./PasswordPrompt.jsx";
 import LoadingScreen from "./LoadingScreen.jsx";
 import ErrorToast from "./ErrorToast.jsx";
 
@@ -31,9 +32,9 @@ const initials = (name) =>
 export default function Transfer({
   accountId, // sender account, taken from the /transfer/:userId URL
   user, // fetched user; drives the From Account card and recent transfers
-  receiver,
-  onSelectReceiver = () => {},
+  pinLength = 6,
   onBack = () => {},
+  onSubmitSuccess = () => {},
   onSuccess = () => {},
 }) {
   // Adjust these field names if your user object differs
@@ -46,6 +47,10 @@ export default function Transfer({
     apiUrl(`/${encodeURIComponent(accountId)}/recent_transfers/10`)
   );
 
+  const [receiver, setReceiver] = useState(null);
+  const [accountQuery, setAccountQuery] = useState("");
+  const [accountLookupFocused, setAccountLookupFocused] = useState(false);
+  const [accountMatches, setAccountMatches] = useState([]);
   const [amount, setAmount] = useState("");
   const [remark, setRemark] = useState("");
   const [showRemark, setShowRemark] = useState(false);
@@ -58,10 +63,63 @@ export default function Transfer({
   const [toast, setToast] = useState(null);
   const { post, loading: submitting } = usePost(apiUrl("/generate-receipt"));
   const amountRef = useRef(null);
+  const lookupSocketRef = useRef(null);
+
+  useEffect(() => {
+    if (!accountLookupFocused) return undefined;
+
+    const lookupSocket = createAccountLookupSocket({
+      userId: accountId,
+      onResult: (response) => {
+        const lookupResult = response.lookup_result;
+        setAccountMatches(lookupResult?.found > 0 ? lookupResult.users ?? [] : []);
+      },
+      onError: () => setAccountMatches([]),
+    });
+    lookupSocketRef.current = lookupSocket;
+
+    return () => {
+      lookupSocket.close();
+      if (lookupSocketRef.current === lookupSocket) lookupSocketRef.current = null;
+    };
+  }, [accountId, accountLookupFocused]);
+
+  useEffect(() => {
+    const query = accountQuery.trim();
+    if (!accountLookupFocused || !query) {
+      setAccountMatches([]);
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      lookupSocketRef.current?.search(query);
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [accountLookupFocused, accountQuery]);
 
   const recent = (recentTransfersData ?? []).filter((item) => !removedIds.includes(item.id));
   const list = listTab === "recent" ? recent : BENEFICIARIES;
   const canContinue = Boolean(receiver) && Number(amount) > 0;
+
+  const handleAccountQueryChange = (event) => {
+    const query = event.target.value;
+    lookupSocketRef.current?.invalidate();
+    setAccountQuery(query);
+    setReceiver(null);
+    setAccountMatches([]);
+  };
+
+  const chooseReceiver = (candidate) => {
+    const name = candidate.full_name ?? candidate.name ?? `${candidate.first_name ?? ""} ${candidate.last_name ?? ""}`.trim();
+    setReceiver({
+      ...candidate,
+      userid: candidate.userid ?? candidate.id,
+      full_name: name,
+    });
+    setAccountQuery(candidate.account);
+    setAccountMatches([]);
+    setAccountLookupFocused(false);
+  };
 
   // Continue begins a review-first confirmation flow.
   const handleContinue = () => {
@@ -85,6 +143,7 @@ export default function Transfer({
     try {
       const result = await post(transferDraft);
       setPassword("");
+      if (result.current_balance != null) onSubmitSuccess(result.current_balance);
       onSuccess(result);
     } catch (err) {
       setPassword("");
@@ -95,7 +154,7 @@ export default function Transfer({
 
   const handlePasswordContinue = () => {
     if (submitting) return;
-    if (password.length !== 6) return;
+    if (password.length !== pinLength) return;
     handleSubmitTransfer();
   };
 
@@ -150,8 +209,8 @@ export default function Transfer({
           </div>
         </section>
 
-        {/* Account number */}
-        <div style={styles.receiverAccount}>
+        {/* Search for a recipient by account number or name */}
+        <div style={{ ...styles.receiverAccount, position: "relative" }}>
           {receiver && <div style={styles.receiverName}>{receiver.full_name ?? `${receiver.first_name ?? ""} ${receiver.last_name ?? ""}`.trim()}</div>}
           <div style={styles.field}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={PURPLE} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -159,13 +218,16 @@ export default function Transfer({
             </svg>
             <input
               type="text"
-              inputMode="numeric"
-              placeholder="Account Number"
-              value={receiver?.account ?? ""}
-              readOnly
+              placeholder="Account number or name"
+              value={accountQuery}
+              onChange={handleAccountQueryChange}
+              onFocus={() => setAccountLookupFocused(true)}
+              onBlur={() => setAccountLookupFocused(false)}
+              autoComplete="off"
+              aria-label="Search by account number or name"
               style={styles.input}
             />
-            <button type="button" aria-label="Scan QR code" style={styles.iconBtn} disabled={Boolean(receiver)}>
+            <button type="button" aria-label="Scan QR code" style={styles.iconBtn}>
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={PURPLE} strokeWidth="1.8" strokeLinejoin="round">
                 <rect x="3" y="3" width="7" height="7" />
                 <rect x="14" y="3" width="7" height="7" />
@@ -174,6 +236,26 @@ export default function Transfer({
               </svg>
             </button>
           </div>
+          {accountLookupFocused && accountMatches.length > 0 && (
+            <ul className="absolute inset-x-0 top-full z-30 mt-1 max-h-60 overflow-y-auto rounded-2xl bg-white p-2 shadow-xl">
+              {accountMatches.map((match) => (
+                <li key={match.userid}>
+                  <button
+                    type="button"
+                    onPointerDown={(event) => event.preventDefault()}
+                    onClick={() => chooseReceiver(match)}
+                    className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-3 text-left hover:bg-purple-50"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold text-[#3a0b55]">{match.full_name}</span>
+                      <span className="block text-xs text-neutral-500">{match.account}</span>
+                    </span>
+                    <span className="text-xs font-semibold text-[#7a1c9e]">Select</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         {/* Amount */}
@@ -250,7 +332,7 @@ export default function Transfer({
             <li key={p.id} style={styles.row}>
               <button
                 type="button"
-                onClick={() => onSelectReceiver(p.id)}
+                onClick={() => chooseReceiver(p)}
                 style={styles.rowMain}
               >
                 <span style={styles.avatar}>{initials(p.name)}</span>
@@ -282,7 +364,7 @@ export default function Transfer({
         <ConfirmTransfer transfer={transferDraft} onCancel={closeFlow} onContinue={() => setStep("password")} />
       )}
       {step === "password" && (
-        <EnterPassword password={password} onPasswordChange={setPassword} onCancel={closeFlow} onContinue={handlePasswordContinue} />
+        <PasswordPrompt password={password} pinLength={pinLength} onPasswordChange={setPassword} onCancel={closeFlow} onContinue={handlePasswordContinue} />
       )}
       {submitting && <LoadingScreen />}
       {toast && <ErrorToast key={toast.id} message={toast.message} onClose={() => setToast(null)} />}

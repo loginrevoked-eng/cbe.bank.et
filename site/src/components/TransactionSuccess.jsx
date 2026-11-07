@@ -1,5 +1,6 @@
-import { Fragment, useLayoutEffect, useRef } from "react";
+import { Fragment, useLayoutEffect, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
+import PaidAnimationOverlay from "./PaidAnimationOverlay.jsx";
 
 
 // Tiny template DSL: mixes plain strings and JSX in one template
@@ -127,6 +128,19 @@ export default function TransactionSuccess({
   const Acct = (x) => `${c}-${x}`;
   const qrValue = new URL(`/api/pdf/${encodeURIComponent(t.transaction_id)}`, window.location.origin).href;
   const receiptRef = useRef(null);
+  const paidAnimationActiveRef = useRef(false);
+  const [paidAnimation, setPaidAnimation] = useState(null);
+
+  const showPaidAnimation = (event) => {
+    if (paidAnimationActiveRef.current || !event.target.closest("[data-paid-overlay-trigger]")) return;
+    paidAnimationActiveRef.current = true;
+    setPaidAnimation({ id: Date.now() });
+  };
+
+  const finishPaidAnimation = () => {
+    paidAnimationActiveRef.current = false;
+    setPaidAnimation(null);
+  };
 
   useLayoutEffect(() => {
     const receipt = receiptRef.current;
@@ -184,6 +198,7 @@ export default function TransactionSuccess({
     <main
       ref={receiptRef}
       data-receipt
+      onPointerDown={showPaidAnimation}
       className="mx-auto min-h-screen w-full max-w-none overflow-hidden bg-white shadow-xl"
     >
       {/* Purple header */}
@@ -221,6 +236,7 @@ export default function TransactionSuccess({
           <h2 className="text-base text-neutral-400">Transaction Summary</h2>
 
           <p
+            data-paid-overlay-trigger
             className="mt-3 text-lg font-medium leading-8 tracking-normal"
             style={{ fontFamily: "Roboto, Arial, sans-serif" }}
           >
@@ -236,7 +252,7 @@ export default function TransactionSuccess({
 
           {/* QR code */}
           <div className="mt-3 flex justify-center">
-            <div className="rounded-2xl border-4 border-neutral-500 bg-white p-3">
+            <div data-paid-overlay-trigger className="rounded-2xl border-4 border-neutral-500 bg-white p-3">
               <QRCodeSVG value={qrValue} size={168} level="M" />
             </div>
           </div>
@@ -278,6 +294,11 @@ export default function TransactionSuccess({
           </button>
         </div>
       </section>
+      <PaidAnimationOverlay
+        key={paidAnimation?.id}
+        active={Boolean(paidAnimation)}
+        onDone={finishPaidAnimation}
+      />
     </main>
   );
 }

@@ -6,6 +6,7 @@ from .config import Config
 from psycopg2 import InterfaceError, OperationalError
 from typing import Optional
 from time import time_ns
+from .models import AccountLookupAutocompleteUser
 
 
 @dataclass
@@ -13,7 +14,7 @@ class QueryResult:
     pass
 
 @dataclass
-class QueryResultSuccess(QueryResult):    
+class QueryResultSuccess(QueryResult):
     rows: list
     description: list
 
@@ -191,8 +192,6 @@ class UserRecord:
     balance: float
     first_name: str
     last_name: str
-    default_receiver: Optional[str] = None
-
     def serialize(self) -> dict:
         # keys are the real column names
         return {
@@ -201,7 +200,6 @@ class UserRecord:
             "balance": self.balance,
             "first name": self.first_name,
             "last name": self.last_name,
-            "default_receiver": self.default_receiver,
         }
 
 
@@ -212,7 +210,6 @@ class UsersDB:
         "balance": "NUMERIC",
         "first name": "TEXT",
         "last name": "TEXT",
-        "default_receiver": "TEXT",
     }
 
     def __init__(self, config: Config):
@@ -232,7 +229,7 @@ class UsersDB:
     def create_table(self):
         cols_sql = ", ".join(f"{_q(col)} {col_type}" for col, col_type in self.USER_COLUMNS.items())
         self._run(f"CREATE TABLE IF NOT EXISTS {_q(self.users_table)} ({cols_sql})")
-        self._run(f'ALTER TABLE {_q(self.users_table)} ADD COLUMN IF NOT EXISTS {_q("default_receiver")} TEXT')
+        self._run(f'ALTER TABLE {_q(self.users_table)} DROP COLUMN IF EXISTS {_q("default_receiver")}')
 
     def initialize(self):
         self.create_table()
@@ -265,29 +262,77 @@ class UsersDB:
             balance=data["balance"],
             first_name=data["first name"],
             last_name=data["last name"],
-            default_receiver=data.get("default_receiver"),
         )
 
-    def update_balance(self, userid, new_balance):
+    def _find_lookup_users(self, where: str, params: list, max_accs: int, exclude_userid: Optional[str]):
+        max_accs = max(1, min(int(max_accs), 100))
+        params = list(params)
+        if exclude_userid:
+            where += f' AND {_q("userid")} <> %s'
+            params.append(exclude_userid)
+        params.append(max_accs)
+
+        result = self._run(
+            f'SELECT {_q("userid")}, {_q("first name")}, {_q("last name")}, {_q("account")} '
+            f'FROM {_q(self.users_table)} '
+            f'WHERE {where} '
+            f'ORDER BY {_q("account")} LIMIT %s',
+            params,
+        )
+        return [
+            AccountLookupAutocompleteUser(
+                userid=row[0],
+                first_name=row[1] or "",
+                last_name=row[2] or "",
+                full_name=f"{row[1] or ''} {row[2] or ''}".strip(),
+                account=row[3],
+            )
+            for row in result.rows
+        ]
+
+    def findaccalike(self, query: str, max_accs: int, exclude_userid: Optional[str] = None):
+        search = query.strip()
+        if not search:
+            return []
+        return self._find_lookup_users(
+            f'{_q("account")} ILIKE %s',
+            [f"%{search}%"],
+            max_accs,
+            exclude_userid,
+        )
+
+    def finduseralike(self, query: str, max_accs: int, exclude_userid: Optional[str] = None):
+        search = " ".join(query.split())
+        if not search:
+            return []
+
+        pattern = f"%{search}%"
+        first_name = _q("first name")
+        last_name = _q("last name")
+        if " " in search:
+            where = f"CONCAT_WS(' ', {first_name}, {last_name}) ILIKE %s"
+            params = [pattern]
+        else:
+            where = f"({first_name} ILIKE %s OR {last_name} ILIKE %s)"
+            params = [pattern, pattern]
+        return self._find_lookup_users(where, params, max_accs, exclude_userid)
+
+    def update_balance(self, userid, add: float):
+        user = self.fetch_user(userid)
+        if user is None:
+            return None
+
+        new_balance = Decimal(str(user.balance)) + Decimal(str(add))
         result = self._run(
             f"UPDATE {_q(self.users_table)} "
             f"SET {_q('balance')} = %s "
             f"WHERE {_q('userid')} = %s "
             f"RETURNING {_q('balance')}",
-            (Decimal(str(new_balance)), userid),
+            (new_balance, userid),
         )
         if not result.rows:
             return None
         return float(result.rows[0][0])
-
-    def set_default_receiver(self, userid, receiver_id):
-        self._run(
-            f"UPDATE {_q(self.users_table)} "
-            f"SET {_q('default_receiver')} = %s "
-            f"WHERE {_q('userid')} = %s",
-            (receiver_id, userid),
-        )
-
 
 class RecentTransfersDB:
     """Stores the most recently used receiver for each sender."""
@@ -341,3 +386,4 @@ class RecentTransfersDB:
             }
             for row in result.rows
         ]
+

@@ -1,6 +1,7 @@
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from pydantic import ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import FileResponse
@@ -11,6 +12,11 @@ from .pdf import HtmlToPdf, render_pdf_template, Html2PdfError
 from .receipt import Receipt, ReceiptRequest, TransactionFees, User
 from .s3 import S3Client, S3Error
 from .db import DBManager, UsersDB, UserRecord, RecentTransfersDB
+from .models import (
+    AccountLookupAutocompleteRequest,
+    AccountLookupAutocompleteResponse,
+    AccountLookupResult,
+)
 
 
 
@@ -35,59 +41,8 @@ class SPAStaticFiles(StaticFiles):
                 raise
             return FileResponse(Path(self.all_directories[0]) / "index.html")
 
-from fastapi.middleware.cors import CORSMiddleware
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
-@app.on_event("startup")
-def startup_event():
-    db_manager.initialize()
-    users.initialize()
-    recent_transfers.initialize()
-    if users.fetch_user("u1") is None:
-        users.save_user(UserRecord(
-            userid="u1",
-            account="1234567890",
-            balance=5000.0,
-            first_name="Alice",
-            last_name="Doe",
-            default_receiver="u2",
-        ))
-    if users.fetch_user("u2") is None:
-        users.save_user(UserRecord(
-            userid="u2",
-            account="0987654321",
-            balance=2500.0,
-            first_name="Bob",
-            last_name="Roe",
-        ))
-    if users.fetch_user("u3") is None:
-        users.save_user(UserRecord(
-            userid="u3",
-            account="1122334455",
-            balance=1800.0,
-            first_name="Sara",
-            last_name="Bekele",
-        ))
-    if users.fetch_user("u4") is None:
-        users.save_user(UserRecord(
-            userid="u4",
-            account="2233445566",
-            balance=3200.0,
-            first_name="Mikael",
-            last_name="Tesfaye",
-        ))
-    sender = users.fetch_user("u1")
-    if sender and not sender.default_receiver:
-        users.set_default_receiver("u1", "u2")
-    for receiver_id in ("u2", "u3", "u4"):
-        recent_transfers.record("u1", receiver_id)
 
 
 @app.on_event("shutdown")
@@ -126,7 +81,7 @@ def generate_receipt(receipt_in: ReceiptRequest):
     try:
         converter.convert(render_pdf_template(receipt, config))
         converter.save(pdf_path)
-        
+
         s3_client.upload_file(pdf_path, "pdf")
         receipt.pdf_url = s3_client.get_direct_url(pdf_path, "pdf")
         receipt.qr_text = receipt.pdf_url
@@ -141,10 +96,10 @@ def generate_receipt(receipt_in: ReceiptRequest):
         Path(qr_path).unlink(missing_ok=True)
 
     db_manager.save_receipt(receipt)
-    users.update_balance(receipt.user_id, receipt.total_debited)
+    current_balance = users.update_balance(receipt.user_id, -receipt.total_debited)
     if receipt_in.receiver_id:
         recent_transfers.record(receipt_in.user_id, receipt_in.receiver_id)
-    return {"status": "success", "transaction_id": receipt.transaction_id}
+    return {"status": "success", "current_balance":current_balance, "transaction_id": receipt.transaction_id}
 
 
 @app.get("/api/transactions/{transaction_id}")
@@ -173,9 +128,38 @@ def get_user(user_id: str):
         "full_name": f"{user.first_name} {user.last_name}".strip(),
         "account": account.account,
         "balance": user.balance,
-        "default_receiver": user.default_receiver,
     }
 
+@app.websocket("/ws/accountlookup/{user_id}")
+async def account_lookup(ws: WebSocket, user_id: str):
+    await ws.accept()
+
+    if users.fetch_user(user_id) is None:
+        await ws.close(code=1008, reason="User not found")
+        return
+
+    try:
+        while True:
+            payload = await ws.receive_json()
+            try:
+                request = AccountLookupAutocompleteRequest.parse_obj(payload)
+            except ValidationError:
+                await ws.close(code=1003, reason="Invalid account lookup request")
+                return
+
+            if request.account and not request.name:
+                matches = users.findaccalike(request.account, request.max_accs, exclude_userid=user_id)
+            elif request.name and not request.account:
+                matches = users.finduseralike(request.name, request.max_accs, exclude_userid=user_id)
+            else:
+                matches = []
+            response = AccountLookupAutocompleteResponse(
+                request_id=request.request_id,
+                lookup_result=AccountLookupResult(found=len(matches), users=matches),
+            )
+            await ws.send_json(response.dict())
+    except WebSocketDisconnect:
+        return
 
 @app.get("/api/{user_id}/recent_transfers/{max_count}")
 def get_recent_transfers(user_id: str, max_count: int):

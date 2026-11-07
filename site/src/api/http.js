@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { API_BASE_URL } from "./Config.jsx";
+import { API_BASE_URL } from "../Config.jsx";
 
 export const apiUrl = (path) => `${API_BASE_URL}${path}`;
 
